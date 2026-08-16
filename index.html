@@ -306,6 +306,12 @@ select.role-select{padding:11px 14px}
       <input id="reqAmount" type="number" placeholder="请输入金额" min="0.01" step="0.01">
       <label style="margin-top:12px">取钱用途</label>
       <input id="reqNote" placeholder="如：买文具 / 买零食 / 充游戏" maxlength="30">
+      <label style="margin-top:12px">支取方式</label>
+      <div class="flex" style="margin-bottom:4px">
+        <button class="btn flex-1" id="payCash" onclick="setPayMethod('现金')" style="background:#f59e0b">💵 现金</button>
+        <button class="btn flex-1" id="payWx" onclick="setPayMethod('微信')" style="background:#e5e7eb;color:#6b7280;opacity:.6">💚 微信</button>
+        <button class="btn flex-1" id="payZfb" onclick="setPayMethod('支付宝')" style="background:#e5e7eb;color:#6b7280;opacity:.6">💙 支付宝</button>
+      </div>
       <div style="background:#fff7ed;border-radius:8px;padding:10px;margin-top:12px;font-size:13px;color:#92400e">
         📨 申请将发送给爸爸妈妈审批
       </div>
@@ -696,9 +702,28 @@ function getChildId(){
 }
 
 // 孩子端：打开申请取钱弹窗
+let curPayMethod = '现金';  // 默认现金
+function setPayMethod(m){
+  curPayMethod = m;
+  const styles = {
+    '现金': ['#f59e0b', '#e5e7eb', '#e5e7eb'],
+    '微信': ['#e5e7eb', '#22c55e', '#e5e7eb'],
+    '支付宝': ['#e5e7eb', '#e5e7eb', '#4f8cff']
+  };
+  const s = styles[m];
+  const cash = document.getElementById('payCash');
+  const wx = document.getElementById('payWx');
+  const zfb = document.getElementById('payZfb');
+  cash.style.background = s[0]; cash.style.opacity = 1; cash.style.color = '#fff';
+  wx.style.background = s[1]; wx.style.opacity = (m==='微信')?1:.6; wx.style.color = (m==='微信')?'#fff':'#6b7280';
+  zfb.style.background = s[2]; zfb.style.opacity = (m==='支付宝')?1:.6; zfb.style.color = (m==='支付宝')?'#fff':'#6b7280';
+  if(m==='现金'){ cash.style.color='#fff'; }
+}
+
 function openWithdrawReq(){
   document.getElementById('reqAmount').value='';
   document.getElementById('reqNote').value='';
+  setPayMethod('现金');
   document.getElementById('withdrawReqModal').classList.remove('hidden');
 }
 
@@ -711,7 +736,7 @@ async function submitWithdrawReq(){
   const childId = getChildId();
   if(!childId){ toast('无法提交申请'); return; }
   const childName = loggedChild ? loggedChild.name : '孩子';
-  const req = { type:'withdraw_req', amount:amount, note:note, time:new Date().toISOString(), childId:childId, childName:childName };
+  const req = { type:'withdraw_req', amount:amount, note:note, payMethod:curPayMethod, time:new Date().toISOString(), childId:childId, childName:childName };
   toast('📨 正在发送申请...');
   try{
     await fetch(NTFY_REQ_BASE + childId, {
@@ -720,7 +745,7 @@ async function submitWithdrawReq(){
     });
     closeModal('withdrawReqModal');
     toast('✅ 申请已发送给爸爸妈妈');
-    document.getElementById('reqStatus').innerHTML = '<div style="background:#fff7ed;border-radius:10px;padding:10px;font-size:13px;color:#92400e;margin-bottom:8px">⏳ 取钱 ¥'+amount.toFixed(2)+'（'+note+'）<br>等待爸爸妈妈审批中...</div>';
+    document.getElementById('reqStatus').innerHTML = '<div style="background:#fff7ed;border-radius:10px;padding:10px;font-size:13px;color:#92400e;margin-bottom:8px">⏳ 取钱 ¥'+amount.toFixed(2)+'（'+note+' · '+curPayMethod+'）<br>等待爸爸妈妈审批中...</div>';
   }catch(e){
     toast('❌ 发送失败，请检查网络');
   }
@@ -791,6 +816,7 @@ function openApprove(index){
   if(!r) return;
   const d = new Date(r.time);
   const timeStr = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());
+  const payMethod = r.payMethod || '现金';
   document.getElementById('approveContent').innerHTML =
     '<div style="text-align:center;margin-bottom:16px">'
     + '<div style="font-size:40px">💸</div>'
@@ -799,6 +825,7 @@ function openApprove(index){
     + '<div style="background:#f0f7ff;border-radius:10px;padding:14px;margin-bottom:14px">'
     + '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="muted">金额</span><b>¥'+r.amount.toFixed(2)+'</b></div>'
     + '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="muted">用途</span><b>'+r.note+'</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span class="muted">支取方式</span><b>'+payMethod+'</b></div>'
     + '<div style="display:flex;justify-content:space-between"><span class="muted">申请时间</span><b>'+timeStr+'</b></div>'
     + '</div>'
     + '<div class="flex" style="gap:8px">'
@@ -817,20 +844,21 @@ function approveReq(index){
   const c = db.children.find(x=>x.id===r.childId);
   if(!c){ toast('❌ 找不到孩子账户'); return; }
   if(r.amount > calcBalance(c)){ toast('❌ 余额不足'); return; }
-  // 写取出记录
+  const payMethod = r.payMethod || '现金';
+  // 写取出记录（摘要自动包含用途+支取方式）
   c.transactions.push({
     id:'t'+Date.now(), type:'out', amount:r.amount,
-    note:r.note, time:new Date().toISOString()
+    note:r.note+'｜支取方式：'+payMethod, time:new Date().toISOString()
   });
   // 记录审批结果（让孩子端看到）
-  c.lastReqResult = { status:'approved', amount:r.amount, reason:'', time:new Date().toISOString(), note:r.note };
+  c.lastReqResult = { status:'approved', amount:r.amount, reason:'', time:new Date().toISOString(), note:r.note, payMethod:payMethod };
   // 从待审批列表移除
   db.pendingRequests.splice(index, 1);
   saveDB(db);
   closeModal('approveModal');
   // 推送到云端（孩子刷新即看到余额变化+审批结果）
   pushToCloud(c.id, buildCloudData(c, db.rates));
-  toast('✅ 已同意取钱 ¥'+r.amount.toFixed(2));
+  toast('✅ 已同意取钱 ¥'+r.amount.toFixed(2)+'（'+payMethod+'）');
   renderParent();
   renderRequests(db.pendingRequests);
 }
