@@ -736,7 +736,9 @@ async function submitWithdrawReq(){
   const childId = getChildId();
   if(!childId){ toast('无法提交申请'); return; }
   const childName = loggedChild ? loggedChild.name : '孩子';
-  const req = { type:'withdraw_req', amount:amount, note:note, payMethod:curPayMethod, time:new Date().toISOString(), childId:childId, childName:childName };
+  // 唯一 ID，用于去重与防重复处理（避免同一申请被多次记录）
+  const reqId = 'wr_' + childId + '_' + Date.now() + '_' + Math.floor(Math.random()*1e4);
+  const req = { id:reqId, type:'withdraw_req', amount:amount, note:note, payMethod:curPayMethod, time:new Date().toISOString(), childId:childId, childName:childName };
   toast('📨 正在发送申请...');
   try{
     await fetch(NTFY_REQ_BASE + childId, {
@@ -746,6 +748,10 @@ async function submitWithdrawReq(){
     closeModal('withdrawReqModal');
     toast('✅ 申请已发送给爸爸妈妈');
     document.getElementById('reqStatus').innerHTML = '<div style="background:#fff7ed;border-radius:10px;padding:10px;font-size:13px;color:#92400e;margin-bottom:8px">⏳ 取钱 ¥'+amount.toFixed(2)+'（'+note+' · '+curPayMethod+'）<br>等待爸爸妈妈审批中...</div>';
+    // 等待审批期间禁用申请按钮，避免重复提交
+    childAwaiting = true;
+    const wb = document.getElementById('withdrawBtn');
+    if(wb){ wb.disabled = true; wb.style.opacity = .5; }
   }catch(e){
     toast('❌ 发送失败，请检查网络');
   }
@@ -754,8 +760,9 @@ async function submitWithdrawReq(){
 // 家长端：拉取所有孩子的取钱申请
 async function pullRequests(){
   const db = getDB();
+  db.processedReqIds = db.processedReqIds || [];
   if(!db.children.length) return;
-  const allReqs = [];
+  const allRaw = [];
   for(const c of db.children){
     try{
       const resp = await fetch(NTFY_REQ_BASE + c.id + '/json?poll=1&since=all');
@@ -768,20 +775,35 @@ async function pullRequests(){
           if(msg.message){
             const d = JSON.parse(msg.message);
             if(d.type === 'withdraw_req' && d.childId === c.id){
-              allReqs.push(d);
+              allRaw.push(d);
             }
           }
         }catch(e){}
       }
     }catch(e){}
   }
-  // 存储申请到本地
-  db.pendingRequests = allReqs;
-  saveDB(db);
-  renderRequests(allReqs);
-  if(allReqs.length){
-    toast('📬 收到 '+allReqs.length+' 条取钱申请');
+  // 去重 + 剔除已处理（已同意/拒绝）的申请，避免反复弹出、反复提醒、重复记录
+  const seen = {};
+  const pending = [];
+  for(const d of allRaw){
+    const id = d.id || (d.childId + '_' + d.time);   // 旧申请无 id，用 childId+time 兜底
+    if(seen[id]) continue;                             // 同一次拉取内的重复
+    if(db.processedReqIds.indexOf(id) !== -1) continue; // 历史上已处理的，不再出现
+    seen[id] = true;
+    d.id = id;
+    pending.push(d);
   }
+  db.pendingRequests = pending;
+  saveDB(db);
+  renderRequests(pending);
+  // 仅在有「新」申请时提醒，已见过的不重复提醒
+  const prevSeen = db.lastPullReqIds || [];
+  const newOnes = pending.filter(p => prevSeen.indexOf(p.id) === -1);
+  if(newOnes.length){
+    toast('📬 收到 ' + newOnes.length + ' 条新取钱申请');
+  }
+  db.lastPullReqIds = pending.map(p=>p.id);
+  saveDB(db);
 }
 
 // 家长端：渲染待审批列表
@@ -797,10 +819,11 @@ function renderRequests(reqs){
   panel.style.display = 'block';
   badge.style.display = 'inline-block';
   badge.textContent = reqs.length;
-  list.innerHTML = reqs.map((r,i)=>{
+  list.innerHTML = reqs.map((r)=>{
+    const rid = r.id || (r.childId+'_'+r.time);
     const d = new Date(r.time);
     const timeStr = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());
-    return '<div class="list-item" onclick="openApprove('+i+')">'
+    return '<div class="list-item" onclick="openApprove(\''+rid+'\')">'
       + '<div class="li-icon" style="background:#fef3c7">💸</div>'
       + '<div class="li-info"><div class="t">'+r.childName+' 申请取 ¥'+r.amount.toFixed(2)+'</div>'
       + '<div class="d">'+r.note+' · '+timeStr+'</div></div>'
@@ -810,10 +833,16 @@ function renderRequests(reqs){
 }
 
 // 家长端：打开审批弹窗
-function openApprove(index){
+function openApprove(id){
   const db = getDB();
-  const r = db.pendingRequests[index];
-  if(!r) return;
+  db.processedReqIds = db.processedReqIds || [];
+  const r = db.pendingRequests.find(x=>x.id===id);
+  if(!r){
+    if(db.processedReqIds.indexOf(id) !== -1){ toast('该申请已处理'); }
+    else { toast('申请不存在或已处理'); }
+    renderRequests(db.pendingRequests || []);
+    return;
+  }
   const d = new Date(r.time);
   const timeStr = d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+pad(d.getHours())+':'+pad(d.getMinutes());
   const payMethod = r.payMethod || '现金';
@@ -829,18 +858,26 @@ function openApprove(index){
     + '<div style="display:flex;justify-content:space-between"><span class="muted">申请时间</span><b>'+timeStr+'</b></div>'
     + '</div>'
     + '<div class="flex" style="gap:8px">'
-    + '<button class="btn btn-green flex-1" onclick="approveReq('+index+')">✅ 同意取钱</button>'
-    + '<button class="btn btn-red flex-1" onclick="rejectReq('+index+')">❌ 拒绝</button>'
+    + '<button class="btn btn-green flex-1" onclick="approveReq(\''+id+'\')">✅ 同意取钱</button>'
+    + '<button class="btn btn-red flex-1" onclick="rejectReq(\''+id+'\')">❌ 拒绝</button>'
     + '</div>'
     + '<button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="closeModal(\'approveModal\')">稍后处理</button>';
   document.getElementById('approveModal').classList.remove('hidden');
 }
 
 // 家长端：同意取钱
-function approveReq(index){
+function approveReq(id){
   const db = getDB();
-  const r = db.pendingRequests[index];
-  if(!r) return;
+  db.processedReqIds = db.processedReqIds || [];
+  // 防重复处理：已处理过的申请直接返回，避免同一申请被多次记录
+  if(db.processedReqIds.indexOf(id) !== -1){
+    toast('该申请已处理');
+    renderRequests(db.pendingRequests || []);
+    return;
+  }
+  const idx = db.pendingRequests.findIndex(x=>x.id===id);
+  if(idx === -1){ toast('申请不存在或已处理'); return; }
+  const r = db.pendingRequests[idx];
   const c = db.children.find(x=>x.id===r.childId);
   if(!c){ toast('❌ 找不到孩子账户'); return; }
   if(r.amount > calcBalance(c)){ toast('❌ 余额不足'); return; }
@@ -852,8 +889,9 @@ function approveReq(index){
   });
   // 记录审批结果（让孩子端看到）
   c.lastReqResult = { status:'approved', amount:r.amount, reason:'', time:new Date().toISOString(), note:r.note, payMethod:payMethod };
-  // 从待审批列表移除
-  db.pendingRequests.splice(index, 1);
+  // 从待审批列表移除，并标记为已处理（防止被再次拉取后重复记录）
+  db.pendingRequests.splice(idx, 1);
+  db.processedReqIds.push(id);
   saveDB(db);
   closeModal('approveModal');
   // 推送到云端（孩子刷新即看到余额变化+审批结果）
@@ -864,16 +902,25 @@ function approveReq(index){
 }
 
 // 家长端：拒绝取钱
-function rejectReq(index){
+function rejectReq(id){
   const db = getDB();
-  const r = db.pendingRequests[index];
-  if(!r) return;
+  db.processedReqIds = db.processedReqIds || [];
+  // 防重复处理：已处理过的申请直接返回
+  if(db.processedReqIds.indexOf(id) !== -1){
+    toast('该申请已处理');
+    renderRequests(db.pendingRequests || []);
+    return;
+  }
+  const idx = db.pendingRequests.findIndex(x=>x.id===id);
+  if(idx === -1){ toast('申请不存在或已处理'); return; }
+  const r = db.pendingRequests[idx];
   const reason = prompt('请输入拒绝理由（会显示给孩子）：');
   if(reason === null) return;
   const c = db.children.find(x=>x.id===r.childId);
   if(!c){ toast('❌ 找不到孩子账户'); return; }
   c.lastReqResult = { status:'rejected', amount:r.amount, reason:reason||'家长未填写理由', time:new Date().toISOString(), note:r.note };
-  db.pendingRequests.splice(index, 1);
+  db.pendingRequests.splice(idx, 1);
+  db.processedReqIds.push(id);
   saveDB(db);
   closeModal('approveModal');
   pushToCloud(c.id, buildCloudData(c, db.rates));
@@ -1052,6 +1099,7 @@ function calcTotalInterest(child, annualRate){
 /* ====================== 孩子端 ====================== */
 let loggedChild = null;
 let sharedChildData = null;  // 从分享链接解析的数据
+let childAwaiting = false;   // 孩子端是否已有申请在等待审批
 
 function renderChild(){
   const hash = location.hash;
@@ -1233,7 +1281,11 @@ function renderChildHome(){
   document.getElementById('childTxList').innerHTML = renderTxList(c.transactions);
   // 审批结果状态
   const reqStatus = document.getElementById('reqStatus');
+  const wb = document.getElementById('withdrawBtn');
   if(c.lastReqResult || c.rq){
+    // 已有审批结果 → 说明上一次申请已处理，恢复申请按钮
+    childAwaiting = false;
+    if(wb){ wb.disabled = false; wb.style.opacity = 1; }
     const rq = c.lastReqResult || c.rq;
     if(rq.status === 'approved'){
       reqStatus.innerHTML = '<div style="background:#dcfce7;border-radius:10px;padding:10px;font-size:13px;color:#15803d;margin-bottom:8px">✅ 爸爸妈妈同意了你的取钱申请！¥'+rq.amount.toFixed(2)+'（'+(rq.note||'')+'）已取出</div>';
@@ -1242,6 +1294,8 @@ function renderChildHome(){
     }
   } else {
     reqStatus.innerHTML = '';
+    // 等待审批期间保持按钮禁用，防止重复提交
+    if(wb){ wb.disabled = childAwaiting; wb.style.opacity = childAwaiting ? .5 : 1; }
   }
 }
 
