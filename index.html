@@ -208,6 +208,23 @@ select.role-select{padding:11px 14px}
       <div id="approveContent"></div>
     </div>
   </div>
+
+  <!-- 重置登录凭证（密码）弹窗 -->
+  <div id="resetCredModal" class="modal-mask hidden">
+    <div class="modal" style="max-width:420px">
+      <h2>🔑 重置登录凭证</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:12px">孩子的登录方式＝<b>姓名 ＋ 出生日期</b>，出生日期相当于密码。重置后请把新的出生日期告诉孩子。</p>
+      <label>孩子姓名</label>
+      <input id="rcName" maxlength="10">
+      <label style="margin-top:12px">新的出生日期（8位数字，相当于新密码）</label>
+      <input id="rcBirth" type="tel" placeholder="如：20010101" pattern="[0-9]{8}" maxlength="8" inputmode="numeric">
+      <div id="rcResult" style="display:none;background:#dcfce7;border-radius:10px;padding:12px;margin-top:14px;font-size:13px;color:#15803d"></div>
+      <div class="flex" style="margin-top:18px">
+        <button class="btn btn-ghost flex-1" onclick="closeModal('resetCredModal')">取消</button>
+        <button class="btn flex-1" onclick="resetCred()">重置并同步</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ============ 孩子端 ============ -->
@@ -525,6 +542,7 @@ function openChildDetail(id){
       <button class="btn btn-red flex-1" onclick="openTx('${id}','out')">💸 取出</button>
     </div>
     <button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="shareChild('${id}')">📤 分享给孩子</button>
+    <button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="openResetCred('${id}')">🔑 重置登录凭证（密码）</button>
     <div style="text-align:right;margin-top:10px">
       <span style="font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline" onclick="deleteChild('${id}')">🗑 删除账户</span>
     </div>
@@ -536,6 +554,44 @@ function openChildDetail(id){
     </div>
     <button class="btn btn-ghost btn-block" style="margin-top:14px" onclick="saveGoal('${id}')">保存目标</button>`;
   document.getElementById('childDetailModal').classList.remove('hidden');
+  // 关键修复：打开详情即把该孩子同步到「id 主题 + 登录主题」，确保孩子用姓名+出生日期默认登录可云端找回
+  pushChildCloud(c, db.rates);
+}
+
+// 家长端：打开「重置登录凭证（密码）」弹窗
+let rcId = null;
+function openResetCred(id){
+  const db = getDB();
+  const c = db.children.find(x=>x.id===id);
+  if(!c) return;
+  rcId = id;
+  document.getElementById('rcName').value = c.name;
+  document.getElementById('rcBirth').value = c.birth;
+  document.getElementById('rcResult').style.display = 'none';
+  document.getElementById('resetCredModal').classList.remove('hidden');
+}
+
+// 家长端：确认重置登录凭证（姓名+出生日期，出生日期相当于密码）
+function resetCred(){
+  if(!rcId) return;
+  const name = document.getElementById('rcName').value.trim();
+  const birth = document.getElementById('rcBirth').value.trim();
+  if(!name){ toast('请输入孩子姓名'); return; }
+  if(!/^\d{8}$/.test(birth)){ toast('请输入8位出生日期，如 20010101'); return; }
+  const y=+birth.slice(0,4), m=+birth.slice(4,6), d=+birth.slice(6,8);
+  if(m<1||m>12||d<1||d>31){ toast('出生日期格式不正确'); return; }
+  const db = getDB();
+  const c = db.children.find(x=>x.id===rcId);
+  if(!c){ toast('找不到孩子账户'); return; }
+  c.name = name; c.birth = birth;
+  saveDB(db);
+  // 同时写到 id 主题 和 登录主题（新出生日期），确保孩子用新凭证能登录、云端也能找回
+  pushChildCloud(c, db.rates);
+  const res = document.getElementById('rcResult');
+  res.style.display = 'block';
+  res.innerHTML = '✅ 已重置！新登录凭证：<br>姓名：'+name+'<br>出生日期（密码）：'+birth+'<br><br>请让孩子用「姓名 + 新出生日期」登录。分享链接仍可正常使用。';
+  toast('✅ 已重置登录凭证');
+  setTimeout(()=>{ renderParent(); }, 800);
 }
 
 function saveGoal(id){
@@ -971,6 +1027,8 @@ function shareChild(id){
   // 先推送到云端，再分享链接
   toast('⏳ 正在同步到云端...');
   pushToCloud(id, cloudData).then(ok=>{
+    // 关键修复：同时把数据写入「姓名+出生日期」登录主题，使孩子默认（输姓名+出生日期）登录也能云端找回
+    pushChildCloud(c, db.rates);
     if(ok){
       toast('✅ 已同步，链接可分享了');
       if(navigator.share){
@@ -1186,16 +1244,14 @@ async function loadCloudChild(childId){
     return;
   }
   
-  sharedChildData = {
-    id:'shared', name:data.n, birth:data.b, goal:data.g||0, photo:data.p||'',
-    transactions: (data.t||[]).map((t,i)=>({
-      id:'st'+i, type: t[0]===1?'in':'out',
-      amount:t[1], note:t[2]||'', time:t[3]
-    })),
-    sharedRate: data.r, sharedRateDate: data.rd,
-    lastReqResult: data.rq || null
-  };
-  loggedChild = sharedChildData;
+  const recovered = cloudToChild(data, data.id);  // 用云端真实 id（如 c1786805717399）
+  // 关键修复：把云端孩子存进本地，退出登录后用「姓名+出生日期」默认登录也能直接命中，不再反复提示不对
+  const db = getDB();
+  const ex = db.children.find(x=>x.id===recovered.id);
+  if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+  saveDB(db);
+  sharedChildData = recovered;
+  loggedChild = recovered;
   document.getElementById('loginPage').classList.add('hidden');
   document.getElementById('childHome').classList.remove('hidden');
   renderChildHome();
