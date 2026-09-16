@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>小金库 · 储蓄工作台</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-512.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="小金库">
+<meta name="theme-color" content="#4f8cff">
 <style>
 :root{
   --bg:#f5f7fb; --card:#fff; --primary:#4f8cff; --primary-d:#3a6fd8;
@@ -891,6 +898,8 @@ async function pullRequests(){
   }
   db.lastPullReqIds = pending.map(p=>p.id);
   saveDB(db);
+  // 刷新家长端桌面图标红点（待审批申请数）
+  refreshParentBadge();
 }
 
 // 家长端：渲染待审批列表
@@ -980,6 +989,7 @@ function approveReq(id){
   db.pendingRequests.splice(idx, 1);
   db.processedReqIds.push(id);
   saveDB(db);
+  refreshParentBadge(); // 即时更新桌面图标红点
   closeModal('approveModal');
   // 推送到云端（孩子刷新即看到余额变化+审批结果）
   pushChildCloud(c, db.rates);
@@ -1009,6 +1019,7 @@ function rejectReq(id){
   db.pendingRequests.splice(idx, 1);
   db.processedReqIds.push(id);
   saveDB(db);
+  refreshParentBadge(); // 即时更新桌面图标红点
   closeModal('approveModal');
   pushChildCloud(c, db.rates);
   toast('已拒绝取钱申请');
@@ -1404,6 +1415,8 @@ function renderChildHome(){
     // 等待审批期间保持按钮禁用，防止重复提交
     if(wb){ wb.disabled = childAwaiting; wb.style.opacity = childAwaiting ? .5 : 1; }
   }
+  // 桌面图标红点：有未读交易/审批则点亮，读取后自动清除
+  refreshBadge(c);
 }
 
 /* ====================== my-dog 游戏 ====================== */
@@ -1623,6 +1636,53 @@ document.querySelectorAll('.modal-mask').forEach(m=>{
   m.addEventListener('click', e=>{ if(e.target===m && m.id!=='dogGame') m.classList.add('hidden'); });
 });
 
+/* ====================== 桌面图标红点（App Badge）未读逻辑 ====================== */
+// 取孩子最新一条交易/审批的时间戳，作为"已读到哪"的基准
+function latestTxTs(c){
+  let t = 0;
+  (c.transactions||[]).forEach(x=>{ const ts=Date.parse(x.time)||0; if(ts>t) t=ts; });
+  if(c.lastReqResult && c.lastReqResult.time){ const rt=Date.parse(c.lastReqResult.time)||0; if(rt>t) t=rt; }
+  return t;
+}
+function getLastRead(id){ const v=localStorage.getItem('kb_lr_'+id); return v?Number(v):null; }
+function setLastRead(id,ts){ try{ localStorage.setItem('kb_lr_'+id, String(ts)); }catch(e){} }
+let __lrTimer=null;
+// 点亮/清除桌面图标红点（App Badge API）
+async function setAppBadgeN(n){
+  try{
+    if(!('setAppBadge' in navigator)) return;
+    if(n>0) await navigator.setAppBadge(n); else await navigator.clearAppBadge();
+  }catch(e){}
+}
+
+// 家长端红点：桌面图标红点 = 待审批取钱申请数量（处理完自动消失）
+// 与孩子端「读取即清」不同——取钱申请是「待处理动作」，红点保留到家长真正同意/拒绝才清。
+function refreshParentBadge(){
+  const db = getDB();
+  const n = (db.pendingRequests || []).length;
+  setAppBadgeN(n);
+}
+// 孩子端：根据未读交易/审批点亮红点；打开读取约 2.5s 后自动清除（读取后汽泡消失）
+function refreshBadge(c){
+  if(!c) return;
+  const id=c.id;
+  let lr=getLastRead(id);
+  const latest=latestTxTs(c);
+  if(lr===null){ setLastRead(id, latest); lr=latest; }  // 首次使用即视为已读，避免历史交易全标未读
+  let unread=0;
+  (c.transactions||[]).forEach(x=>{ if((Date.parse(x.time)||0)>lr) unread++; });
+  if(c.lastReqResult && c.lastReqResult.time && (Date.parse(c.lastReqResult.time)||0)>lr) unread++;
+  if(unread>0){
+    setAppBadgeN(unread);
+    toast('💡 有 '+unread+' 笔新的账户变动');
+    if(__lrTimer) clearTimeout(__lrTimer);
+    __lrTimer=setTimeout(()=>{
+      setLastRead(id, latestTxTs(c));
+      setAppBadgeN(0);
+    }, 2500);
+  }
+}
+
 /* ====================== 启动 ====================== */
 (function init(){
   // 处理分享链接：云端同步模式 #k= 或快照模式 #d=
@@ -1634,6 +1694,11 @@ document.querySelectorAll('.modal-mask').forEach(m=>{
     switchRole(role);
   }
 })();
+
+// 注册 Service Worker：支持"添加到主屏幕"与桌面图标红点/离线访问
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
 </script>
 </body>
 </html>
