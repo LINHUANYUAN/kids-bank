@@ -135,6 +135,21 @@ select.role-select{padding:11px 14px}
       </div>
     </div>
 
+    <!-- 理财收益率设置 -->
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <b style="font-size:16px">📈 理财收益率设置</b>
+        <button class="btn btn-sm btn-ghost" onclick="saveWealthRates()">💾 保存</button>
+      </div>
+      <p class="muted" style="font-size:12px;margin-bottom:12px">设置各期限理财年化收益率，孩子购买时按此计算每天利息与到期收益。可随时手动调整。</p>
+      <div class="flex" style="gap:8px">
+        <div class="flex-1"><label>3个月 (%)</label><input id="wr3" type="number" value="3" step="0.1" min="0" max="50"></div>
+        <div class="flex-1"><label>6个月 (%)</label><input id="wr6" type="number" value="5" step="0.1" min="0" max="50"></div>
+        <div class="flex-1"><label>12个月 (%)</label><input id="wr12" type="number" value="8" step="0.1" min="0" max="50"></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px">示例：购买 ¥1000、3个月、收益率 3% → 到期利息 ¥7.50，共 ¥1007.50 回到余额</div>
+    </div>
+
     <!-- 管理说明 -->
     <div class="card" style="background:#fffbeb;border:1px solid #fde68a">
       <b style="color:#92400e">📌 使用说明</b>
@@ -144,7 +159,6 @@ select.role-select{padding:11px 14px}
         <li>年利息按央行1年期基准利率同步计算</li>
         <li>点击「分享给孩子」生成专属链接，发到孩子手机/平板</li>
         <li>孩子打开链接<b>直接看到</b>余额、每日利息和交易明细</li>
-        <li>孩子达成储蓄目标后，可玩 my-dog 奖励小游戏 🐶</li>
       </ol>
     </div>
 
@@ -294,15 +308,12 @@ select.role-select{padding:11px 14px}
           <span class="muted" style="font-size:12px" id="goalText">未设置</span>
         </div>
         <div class="progress"><div id="goalProgress" style="width:0%"></div></div>
-        <div style="font-size:12px;color:var(--muted)" id="goalHint">努力存钱，达成目标可以玩游戏哦！</div>
+        <div style="font-size:12px;color:var(--muted)" id="goalHint">努力存钱，向着目标前进吧！</div>
       </div>
 
-      <!-- my-dog 入口 -->
-      <div class="card" style="text-align:center;background:linear-gradient(135deg,#fef3c7,#fde68a);border:1px solid #fcd34d">
-        <div style="font-size:40px">🐶</div>
-        <b style="color:#92400e;font-size:16px">My Dog 奖励游戏</b>
-        <p style="font-size:13px;color:#78350f;margin:6px 0 12px" id="dogHint">存钱达成目标，就能和狗狗玩耍啦！</p>
-        <button class="btn" id="dogBtn" onclick="openDogGame()" style="background:#f59e0b">🎮 开始游戏</button>
+      <!-- 理财专区 -->
+      <div class="card">
+        <div id="wealthCardContent"></div>
       </div>
 
       <!-- 交易明细 -->
@@ -347,31 +358,56 @@ select.role-select{padding:11px 14px}
   </div>
 </div>
 
-<!-- ============ my-dog 游戏 ============ -->
-<div id="dogGame" class="modal-mask hidden" style="background:#87ceeb">
-  <div style="width:100%;max-width:500px;height:100vh;max-height:700px;display:flex;flex-direction:column">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;color:#fff">
-      <b style="font-size:18px;text-shadow:1px 1px 2px rgba(0,0,0,.3)">🐶 My Dog</b>
-      <button onclick="closeDogGame()" style="background:rgba(255,255,255,.3);border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;cursor:pointer">✕</button>
+<!-- ============ 购买理财弹窗 ============ -->
+<div id="wealthBuyModal" class="modal-mask hidden">
+  <div class="modal">
+    <h2>🛒 购买理财</h2>
+    <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px">
+      <div style="display:flex;justify-content:space-between"><span class="muted">可用余额</span><b id="wbAvailable" style="color:#4f3df0">¥0.00</b></div>
     </div>
-    <div style="flex:1;position:relative;overflow:hidden" id="gameArea">
-      <canvas id="gameCanvas" style="display:block;width:100%;height:100%"></canvas>
-      <div id="gameStart" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:20px">
-        <div style="font-size:70px">🐶</div>
-        <h2 style="margin:10px 0;text-shadow:1px 1px 2px rgba(0,0,0,.3)">喂狗狗吃骨头！</h2>
-        <p style="opacity:.9;max-width:280px;margin-bottom:20px;text-shadow:1px 1px 2px rgba(0,0,0,.3)">点击屏幕投掷骨头，让狗狗接住。接得越多越开心！</p>
-        <button class="btn" style="background:#f59e0b" onclick="startGame()">▶ 开始</button>
-      </div>
-      <div id="gameOver" style="position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:20px;background:rgba(0,0,0,.5)">
-        <div style="font-size:60px">🦴</div>
-        <h2 style="margin:8px 0">游戏结束！</h2>
-        <p style="font-size:18px;margin-bottom:4px">得分：<b id="finalScore">0</b></p>
-        <p style="font-size:14px;opacity:.9;margin-bottom:18px" id="dogComment">狗狗很开心！</p>
-        <button class="btn" style="background:#f59e0b" onclick="startGame()">🔄 再玩一次</button>
-      </div>
-      <div id="gameHUD" style="position:absolute;top:50px;left:16px;color:#fff;font-size:14px;font-weight:700;text-shadow:1px 1px 2px rgba(0,0,0,.5);display:none">
-        得分：<span id="scoreNum">0</span>
-      </div>
+    <label>购买金额（元）</label>
+    <input id="wbAmount" type="number" placeholder="如：1000" min="0.01" step="0.01" oninput="updateWealthPreview()">
+    <label style="margin-top:12px">理财期限</label>
+    <div class="flex" style="margin-bottom:4px">
+      <button class="btn flex-1" id="wbTerm3" onclick="setWealthTerm(3)">3个月</button>
+      <button class="btn flex-1" id="wbTerm6" onclick="setWealthTerm(6)">6个月</button>
+      <button class="btn flex-1" id="wbTerm12" onclick="setWealthTerm(12)">12个月</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted)" id="wbRateInfo"></div>
+    <div style="background:#f0fdf4;border-radius:10px;padding:12px;margin-top:12px;font-size:13px" id="wbPreview"></div>
+    <div class="flex" style="margin-top:16px">
+      <button class="btn btn-ghost flex-1" onclick="closeModal('wealthBuyModal')">取消</button>
+      <button class="btn flex-1" style="background:var(--purple)" onclick="buyWealth()">确认购买</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">
+      💡 收益按管理员设定的收益率计算，到期本金＋利息自动回到余额
+    </div>
+  </div>
+</div>
+
+<!-- ============ 购买理财弹窗 ============ -->
+<div id="wealthBuyModal" class="modal-mask hidden">
+  <div class="modal">
+    <h2>🛒 购买理财</h2>
+    <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px">
+      <div style="display:flex;justify-content:space-between"><span class="muted">可用余额</span><b id="wbAvailable" style="color:#4f3df0">¥0.00</b></div>
+    </div>
+    <label>购买金额（元）</label>
+    <input id="wbAmount" type="number" placeholder="如：1000" min="0.01" step="0.01" oninput="updateWealthPreview()">
+    <label style="margin-top:12px">理财期限</label>
+    <div class="flex" style="margin-bottom:4px">
+      <button class="btn flex-1" id="wbTerm3" onclick="setWealthTerm(3)">3个月</button>
+      <button class="btn flex-1" id="wbTerm6" onclick="setWealthTerm(6)">6个月</button>
+      <button class="btn flex-1" id="wbTerm12" onclick="setWealthTerm(12)">12个月</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted)" id="wbRateInfo"></div>
+    <div style="background:#f0fdf4;border-radius:10px;padding:12px;margin-top:12px;font-size:13px" id="wbPreview"></div>
+    <div class="flex" style="margin-top:16px">
+      <button class="btn btn-ghost flex-1" onclick="closeModal('wealthBuyModal')">取消</button>
+      <button class="btn flex-1" style="background:var(--purple)" onclick="buyWealth()">确认购买</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">
+      💡 收益按管理员设定的收益率计算，到期本金＋利息自动回到余额
     </div>
   </div>
 </div>
@@ -404,8 +440,14 @@ const DEFAULT_RATES = {
 };
 
 function loadDB(){
-  try{ return JSON.parse(localStorage.getItem(DB_KEY)) || {children:[], rates:DEFAULT_RATES}; }
-  catch(e){ return {children:[], rates:DEFAULT_RATES}; }
+  try{
+    const d = JSON.parse(localStorage.getItem(DB_KEY));
+    if(!d) return {children:[], rates:DEFAULT_RATES, wealthRates:{3:3,6:5,12:8}};
+    if(!d.rates) d.rates = DEFAULT_RATES;
+    if(!d.wealthRates) d.wealthRates = {3:3,6:5,12:8};
+    return d;
+  }
+  catch(e){ return {children:[], rates:DEFAULT_RATES, wealthRates:{3:3,6:5,12:8}}; }
 }
 function saveDB(db){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 function getDB(){ return loadDB(); }
@@ -434,10 +476,13 @@ function renderParent(){
   const db = getDB();
   renderChildList(db);
   renderRates(db);
+  renderParentWealthRates(db);
   // 渲染本地缓存的待审批申请
   renderRequests(db.pendingRequests || []);
   // 异步拉取最新申请
   pullRequests();
+  // 异步从云端同步孩子的理财持仓/余额变动（孩子端购买理财后家长也能看到）
+  syncChildrenWealthFromCloud();
 }
 
 function renderChildList(db){
@@ -517,6 +562,7 @@ function saveChild(){
 }
 
 function openChildDetail(id){
+  curWealthDetailId = id;
   const db = getDB();
   const c = db.children.find(x=>x.id===id);
   if(!c) return;
@@ -555,11 +601,15 @@ function openChildDetail(id){
     </div>
     <div style="margin-top:14px">
       <b style="font-size:14px">📋 交易明细（${c.transactions.length}）</b>
-      <div id="detailTxList" style="margin-top:6px;max-height:200px;overflow-y:auto">
-        ${renderTxList(c.transactions)}
+        <div id="detailTxList" style="margin-top:6px;max-height:200px;overflow-y:auto">
+          ${renderTxList(c.transactions)}
+        </div>
       </div>
-    </div>
-    <button class="btn btn-ghost btn-block" style="margin-top:14px" onclick="saveGoal('${id}')">保存目标</button>`;
+      <div style="margin-top:14px">
+        <b style="font-size:14px">📈 理财持仓（${c.wealth?c.wealth.length:0}）</b>
+        <div id="detailWealthList" style="margin-top:6px">${renderWealthDetail(c)}</div>
+      </div>
+      <button class="btn btn-ghost btn-block" style="margin-top:14px" onclick="saveGoal('${id}')">保存目标</button>`;
   document.getElementById('childDetailModal').classList.remove('hidden');
   // 关键修复：打开详情即把该孩子同步到「id 主题 + 登录主题」，确保孩子用姓名+出生日期默认登录可云端找回
   pushChildCloud(c, db.rates);
@@ -776,6 +826,9 @@ function buildCloudData(c, rates){
     n: c.name, b: c.birth, g: c.goal||0, p: c.photo||'',
     t: c.transactions.map(t=>[t.type==='in'?1:0, t.amount, t.note, t.time]),
     r: rates.fixed_1y, rd: rates.date,
+    // 理财持仓：本金 / 收益率 / 期限(月) / 购买时间 / 到期时间 / 状态 / 持仓id / 赎回时间
+    w: (c.wealth||[]).map(h=>[h.principal, h.rate, h.termMonths, h.buyTime, h.maturityTime, h.status, h.id, h.redeemedTime||null]),
+    wr: rates.wealthRates || {3:3,6:5,12:8},  // 理财收益率（家长设定，孩子购买时按此计算）
     rq: c.lastReqResult || null,  // 最近一次审批结果
     ts: Date.now()  // 更新时间戳
   };
@@ -804,7 +857,13 @@ function cloudToChild(data, id){
     transactions: (data.t||[]).map((t,i)=>({
       id:'st'+i, type: t[0]===1?'in':'out', amount:t[1], note:t[2]||'', time:t[3]
     })),
+    wealth: (data.w||[]).map(h=>({
+      id: h[6]||('w'+Math.random().toString(36).slice(2,8)),
+      principal: h[0], rate: h[1], termMonths: h[2],
+      buyTime: h[3], maturityTime: h[4], status: h[5], redeemedTime: h[7]||null
+    })),
     sharedRate: data.r, sharedRateDate: data.rd,
+    wealthRates: data.wr || {3:3,6:5,12:8},
     lastReqResult: data.rq || null
   };
 }
@@ -850,8 +909,10 @@ function decodeSnapshot(snap){
 // 用最新数据刷新链接内嵌快照（replaceState 不新增历史记录），保证链接永不过期
 function refreshLinkSnapshot(id, c, rates){
   try{
-    const snap = btoa(unescape(encodeURIComponent(JSON.stringify(buildCloudData(c, rates)))));
-    history.replaceState(null, '', location.pathname + '#k=' + id + '~' + snap);
+    // 短链接：仅保留孩子ID，云端作为数据来源
+    if(id && id !== 'shared'){
+      history.replaceState(null, '', location.pathname + '#k=' + id);
+    }
   }catch(e){}
 }
 // 获取当前孩子的真实ID
@@ -1102,12 +1163,11 @@ function shareChild(id){
   const c = db.children.find(x=>x.id===id);
   if(!c) return;
   const cloudData = buildCloudData(c, db.rates);
-  // 把完整数据快照编进链接：链接自带数据、永不过期，云端仅作实时刷新增强
-  const snap = btoa(unescape(encodeURIComponent(JSON.stringify(cloudData))));
-  const url = location.origin + location.pathname + '#k=' + id + '~' + snap;
-  const shareText = `🏦 【${c.name}的小金库】\n点击链接直接查看你的余额和利息：\n${url}\n\n💰 每日利息正在帮你赚钱哦！\n🎯 继续存钱，达成目标可以玩狗狗游戏！\n\n（链接永久有效，随时刷新看最新数据）`;
+  // 短链接：仅含孩子ID，云端作为数据来源；孩子打开时从云端拉取最新数据
+  const url = location.origin + location.pathname + '#k=' + id;
+  const shareText = `🏦 【${c.name}的小金库】\n点击链接直接查看你的余额和利息：\n${url}\n\n💰 每日利息正在帮你赚钱哦！\n🔄 打开即可看到最新数据`;
 
-  // 同步到云端（实时刷新增强）；即使云端失效，链接内嵌快照也能保证孩子打开
+  // 同步到云端（数据来源）；孩子打开链接时从云端拉取最新数据
   toast('⏳ 正在同步到云端...');
   pushChildCloud(c, db.rates);
   if(navigator.share){
@@ -1117,7 +1177,7 @@ function shareChild(id){
   } else {
     copyShare(shareText);
   }
-  toast('✅ 链接已生成（含最新数据，永不过期）');
+  toast('✅ 分享链接已生成（已同步到云端）');
 }
 function copyShare(text){
   if(navigator.clipboard){
@@ -1128,6 +1188,275 @@ function copyShare(text){
     prompt('复制以下信息发给孩子：', text);
   }
 }
+
+/* ====================== 理财专区 ====================== */
+// 30.4375 = 平均每月天数（365/12），用于期限换算
+const MONTH_DAYS = 30.4375;
+
+// 当前生效的理财收益率（孩子端优先用云端同步来的，否则用本地库配置）
+function getWealthRates(){
+  const db = getDB();
+  if(loggedChild && loggedChild.wealthRates) return loggedChild.wealthRates;
+  return db.wealthRates || {3:3,6:5,12:8};
+}
+
+// 取得当前正在操作的孩子对象（优先本地库条目，确保改动能持久化）
+function currentChildForEdit(){
+  const id = (loggedChild && loggedChild.id) || getChildId();
+  if(id){
+    const db = getDB();
+    const ex = db.children.find(x=>x.id===id);
+    if(ex) return ex;
+  }
+  return loggedChild;
+}
+
+// 检查并自动赎回已到期的理财持仓：本金+利息写回余额，并备注资金来源
+function checkWealthRedeem(c){
+  if(!c.wealth || !c.wealth.length) return false;
+  let changed = false;
+  const now = Date.now();
+  for(const h of c.wealth){
+    if(h.status==='holding' && Date.parse(h.maturityTime) <= now){
+      const interest = h.principal * (h.rate/100) * (h.termMonths/12);
+      c.transactions.push({
+        id:'t'+Date.now()+'_r'+Math.random().toString(36).slice(2,6),
+        type:'in',
+        amount: +(h.principal + interest).toFixed(2),
+        note:'理财资金及收益利息到期自动赎回（'+h.termMonths+'个月期·收益率'+h.rate+'%）',
+        time: new Date().toISOString(),
+        cat:'wealth_redeem'
+      });
+      h.status = 'redeemed';
+      h.redeemedTime = new Date().toISOString();
+      changed = true;
+    }
+  }
+  return changed;
+}
+
+// 理财汇总数据：持有本金、每日理财利息、已计息、累计收益
+function wealthSummary(c){
+  let holdingPrincipal=0, holdingDaily=0, accruedNow=0, redeemedInterest=0, holdingCount=0;
+  const now = Date.now();
+  (c.wealth||[]).forEach(h=>{
+    if(h.status==='holding'){
+      holdingCount++;
+      holdingPrincipal += h.principal;
+      holdingDaily += h.principal * (h.rate/100) / 365;
+      const days = Math.min((now - Date.parse(h.buyTime))/86400000, h.termMonths*MONTH_DAYS);
+      accruedNow += h.principal * (h.rate/100) * (days/365);
+    } else {
+      redeemedInterest += h.principal * (h.rate/100) * (h.termMonths/12);
+    }
+  });
+  return {holdingPrincipal, holdingDaily, accruedNow, redeemedInterest, holdingCount};
+}
+
+function fmtWealthDate(iso){
+  const d = new Date(iso);
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+}
+
+// 渲染孩子端理财专区卡片
+function renderWealthCard(c){
+  const box = document.getElementById('wealthCardContent');
+  if(!box) return;
+  const rates = getWealthRates();
+  const s = wealthSummary(c);
+  let html = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    + '<b style="font-size:16px">📈 理财专区</b><span class="muted" style="font-size:12px">从小培养理财习惯</span></div>';
+  // 汇总
+  html += '<div style="display:flex;gap:8px;margin-bottom:8px">'
+    + '<div style="flex:1;background:#f5f3ff;border-radius:10px;padding:8px 10px"><div style="font-size:11px;color:#6d28d9">💰 持有本金</div><div style="font-size:16px;font-weight:700;color:#6d28d9">¥'+s.holdingPrincipal.toFixed(2)+'</div></div>'
+    + '<div style="flex:1;background:#f5f3ff;border-radius:10px;padding:8px 10px"><div style="font-size:11px;color:#6d28d9">📅 每日理财利息</div><div style="font-size:16px;font-weight:700;color:#6d28d9">¥'+s.holdingDaily.toFixed(3)+'</div></div></div>';
+  html += '<div style="font-size:12px;color:var(--muted);margin-bottom:10px">累计理财收益（含持有中已计息）：<b style="color:#15803d">¥'+(s.accruedNow+s.redeemedInterest).toFixed(2)+'</b></div>';
+  // 持仓列表
+  const holdings = (c.wealth||[]);
+  if(!holdings.length){
+    html += '<div class="empty" style="padding:20px 0"><span class="emoji">📈</span>还没有理财持仓<br>用余额买一份，让钱生钱！</div>';
+  } else {
+    const now = Date.now();
+    holdings.slice().reverse().forEach(h=>{
+      const totalDays = h.termMonths*MONTH_DAYS;
+      const daysHeld = Math.max(0, (now - Date.parse(h.buyTime))/86400000);
+      const progress = Math.min(100, daysHeld/totalDays*100);
+      const daily = h.principal * (h.rate/100) / 365;
+      const accrued = Math.min(h.principal*(h.rate/100)*(h.termMonths/12), h.principal*(h.rate/100)*(daysHeld/365));
+      const expectedInterest = h.principal*(h.rate/100)*(h.termMonths/12);
+      const expectedTotal = h.principal + expectedInterest;
+      if(h.status==='holding'){
+        html += '<div class="list-item" style="flex-direction:column;align-items:stretch;gap:6px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center">'
+          + '<div><b>¥'+h.principal.toFixed(2)+'</b> <span class="muted" style="font-size:12px">'+h.termMonths+'个月 · 收益率'+h.rate+'%</span></div>'
+          + '<span class="tag" style="background:#ede9fe;color:#6d28d9">持有中</span></div>'
+          + '<div class="progress"><div style="width:'+progress+'%"></div></div>'
+          + '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted)">'
+          + '<span>每日利息 ¥'+daily.toFixed(3)+' · 已计息 ¥'+accrued.toFixed(2)+'</span>'
+          + '<span>'+fmtWealthDate(h.maturityTime)+' 到期</span></div>'
+          + '<div style="font-size:12px;color:#15803d">预计到期收益 ¥'+expectedInterest.toFixed(2)+' → 共 ¥'+expectedTotal.toFixed(2)+'</div>'
+          + '</div>';
+      } else {
+        html += '<div class="list-item" style="flex-direction:column;align-items:stretch;gap:6px">'
+          + '<div style="display:flex;justify-content:space-between;align-items:center">'
+          + '<div><b>¥'+h.principal.toFixed(2)+'</b> <span class="muted" style="font-size:12px">'+h.termMonths+'个月 · 收益率'+h.rate+'%</span></div>'
+          + '<span class="tag tag-in">已赎回</span></div>'
+          + '<div style="font-size:12px;color:#15803d">已获收益 ¥'+expectedInterest.toFixed(2)+' 已回到余额</div>'
+          + '</div>';
+      }
+    });
+  }
+  html += '<button class="btn btn-block" style="margin-top:12px;background:var(--purple)" onclick="openWealthBuy()">🛒 购买理财</button>';
+  box.innerHTML = html;
+}
+
+// 家长端详情中的理财持仓摘要
+function renderWealthDetail(c){
+  const hs = (c.wealth||[]);
+  if(!hs.length) return '<div class="muted" style="font-size:13px;padding:6px 0">暂无理财持仓</div>';
+  return hs.slice().reverse().map(h=>{
+    const tag = h.status==='holding'
+      ? '<span class="tag" style="background:#ede9fe;color:#6d28d9">持有中</span>'
+      : '<span class="tag tag-in">已赎回</span>';
+    const interest = h.principal*(h.rate/100)*(h.termMonths/12);
+    return '<div class="list-item" style="padding:8px 0">'
+      + '<div class="li-info"><div class="t">¥'+h.principal.toFixed(2)+' · '+h.termMonths+'个月 · '+h.rate+'%</div>'
+      + '<div class="d">'+(h.status==='holding'?'到期 '+fmtWealthDate(h.maturityTime):'已回到余额')+'</div></div>'
+      + '<div class="li-amt text-green">+¥'+interest.toFixed(2)+'</div></div>';
+  }).join('');
+}
+
+// 打开购买理财弹窗
+let curWealthTerm = 3;
+function openWealthBuy(){
+  const c = currentChildForEdit();
+  const bal = calcBalance(c);
+  document.getElementById('wbAvailable').textContent = '¥'+bal.toFixed(2);
+  document.getElementById('wbAmount').value = '';
+  curWealthTerm = 3;
+  setWealthTerm(3);
+  updateWealthPreview();
+  document.getElementById('wealthBuyModal').classList.remove('hidden');
+}
+function setWealthTerm(t){
+  curWealthTerm = t;
+  const styles = {3:['#8b5cf6','#e5e7eb','#e5e7eb'], 6:['#e5e7eb','#8b5cf6','#e5e7eb'], 12:['#e5e7eb','#e5e7eb','#8b5cf6']};
+  const s = styles[t];
+  const b3=document.getElementById('wbTerm3'), b6=document.getElementById('wbTerm6'), b12=document.getElementById('wbTerm12');
+  const arr=[b3,b6,b12];
+  arr.forEach((b,i)=>{ b.style.background=s[i]; b.style.color=(t===3+i)?'#fff':'#6b7280'; });
+  updateWealthPreview();
+}
+function updateWealthPreview(){
+  const amt = parseFloat(document.getElementById('wbAmount').value)||0;
+  const rates = getWealthRates();
+  const rate = rates[curWealthTerm];
+  const interest = amt * (rate/100) * (curWealthTerm/12);
+  const total = amt + interest;
+  const maturity = new Date(Date.now() + curWealthTerm*MONTH_DAYS*86400000);
+  document.getElementById('wbRateInfo').textContent = '当前'+curWealthTerm+'个月收益率：'+rate+'%（管理员设定）';
+  document.getElementById('wbPreview').innerHTML =
+    '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>本金</span><b>¥'+amt.toFixed(2)+'</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>期限</span><b>'+curWealthTerm+'个月</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>年化收益率</span><b>'+rate+'%</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>预计利息</span><b style="color:#15803d">¥'+interest.toFixed(2)+'</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px dashed #bbf7d0"><span>到期金额</span><b style="color:#15803d;font-size:16px">¥'+total.toFixed(2)+'</b></div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:4px">预计到期日：'+maturity.getFullYear()+'-'+pad(maturity.getMonth()+1)+'-'+pad(maturity.getDate())+'</div>';
+}
+
+// 确认购买理财：本金锁定扣除，生成持仓；到期由 checkWealthRedeem 自动赎回
+function buyWealth(){
+  const amt = parseFloat(document.getElementById('wbAmount').value);
+  const term = curWealthTerm;
+  const rates = getWealthRates();
+  const rate = rates[term];
+  if(!amt || amt<=0){ toast('请输入购买金额'); return; }
+  const c = currentChildForEdit();
+  if(!c){ toast('操作失败'); return; }
+  const bal = calcBalance(c);
+  if(amt > bal){ toast('❌ 可用余额不足'); return; }
+  const buyTime = new Date();
+  const maturity = new Date(buyTime.getTime() + term*MONTH_DAYS*86400000);
+  const holding = {
+    id:'w'+Date.now(),
+    principal: amt,
+    rate: rate,
+    termMonths: term,
+    buyTime: buyTime.toISOString(),
+    maturityTime: maturity.toISOString(),
+    status:'holding',
+    redeemedTime:null
+  };
+  c.wealth = c.wealth || [];
+  c.wealth.push(holding);
+  // 本金作为「锁定」从可用余额扣除
+  c.transactions.push({
+    id:'t'+Date.now(), type:'out',
+    amount: amt,
+    note:'理财购买·'+term+'个月期（锁定本金¥'+amt.toFixed(2)+'·收益率'+rate+'%）',
+    time: buyTime.toISOString(), cat:'wealth_buy'
+  });
+  // 持久化 + 同步云端
+  const db = getDB();
+  const ex = db.children.find(x=>x.id===c.id);
+  if(ex){ Object.assign(ex, c); saveDB(db); }
+  pushChildCloud(c, db.rates);
+  refreshLinkSnapshot(getChildId()||c.id, c, db.rates);
+  closeModal('wealthBuyModal');
+  toast('✅ 已购买理财 ¥'+amt.toFixed(2)+'（'+term+'个月·收益率'+rate+'%）');
+  renderChildHome();
+}
+
+// 家长端：保存理财收益率并同步云端
+function saveWealthRates(){
+  const r3 = parseFloat(document.getElementById('wr3').value);
+  const r6 = parseFloat(document.getElementById('wr6').value);
+  const r12 = parseFloat(document.getElementById('wr12').value);
+  if([r3,r6,r12].some(v=>isNaN(v)||v<0||v>50)){ toast('请输入有效收益率（0 ~ 50）'); return; }
+  const db = getDB();
+  db.wealthRates = {3:r3, 6:r6, 12:r12};
+  saveDB(db);
+  // 同步到云端，使孩子端购买时按最新收益率计算
+  (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates); });
+  renderParentWealthRates(db);
+  toast('✅ 理财收益率已更新，孩子端将自动同步');
+}
+function renderParentWealthRates(db){
+  db = db || getDB();
+  const wr = db.wealthRates || {3:3,6:5,12:8};
+  const e3=document.getElementById('wr3'), e6=document.getElementById('wr6'), e12=document.getElementById('wr12');
+  if(e3) e3.value = wr[3];
+  if(e6) e6.value = wr[6];
+  if(e12) e12.value = wr[12];
+}
+
+// 家长端：从云端同步孩子的理财持仓/余额变动（孩子端购买理财后，家长也能看到）
+async function syncChildrenWealthFromCloud(){
+  const db = getDB();
+  if(!db.children || !db.children.length) return;
+  for(const c of db.children){
+    if(!c.id || c.id==='shared') continue;
+    try{
+      const data = await pullFromCloud(c.id);
+      if(data){
+        const r = cloudToChild(data, data.id);
+        const ex = db.children.find(x=>x.id===r.id);
+        if(ex){ Object.assign(ex, r); saveDB(db); }
+      }
+    }catch(e){}
+  }
+  renderChildList(db);
+  // 若孩子详情弹窗正打开，刷新其中的理财摘要
+  const dwl = document.getElementById('detailWealthList');
+  if(dwl){
+    const openId = document.querySelector('#childDetailModal:not(.hidden)');
+    if(openId){
+      const c = db.children.find(x=>x.id===curWealthDetailId);
+      if(c) dwl.innerHTML = renderWealthDetail(c);
+    }
+  }
+}
+let curWealthDetailId = null;
 
 /* ====================== 数据备份 ====================== */
 function exportData(){
@@ -1335,7 +1664,7 @@ async function loadCloudChild(childId, snap){
       pushToCloud(childId, buildCloudData(c, db.rates));
       pushToCloud(childLoginTopic(c.name, c.birth), buildCloudData(c, db.rates));
       cacheChild(c);
-      toast('⚠️ 云端暂时无响应，已用链接自带数据打开（可能不是最新）');
+      // 链接自带数据兜底，静默打开，不弹干扰提示
       return;
     }
   }
@@ -1350,7 +1679,7 @@ async function loadCloudChild(childId, snap){
     renderChildHome();
     pushToCloud(childId, buildCloudData(cached, db.rates));
     pushToCloud(childLoginTopic(cached.name, cached.birth), buildCloudData(cached, db.rates));
-    toast('⚠️ 网络暂时不通，已用本地缓存数据打开（可能不是最新，联网后会自动更新）');
+    // 本地缓存兜底，静默打开，不弹干扰提示
     return;
   }
 
@@ -1464,6 +1793,15 @@ function renderChildHome(){
   let c = db.children.find(x=>x.id===loggedChild.id);
   if(!c && sharedChildData){ c = sharedChildData; }  // 分享数据模式
   if(!c){ childLogout(); return; }
+  // 自动赎回到期理财：本金+利息写回余额，并备注资金来源
+  if(checkWealthRedeem(c)){
+    const ex = db.children.find(x=>x.id===c.id);
+    if(ex){ Object.assign(ex, c); saveDB(db); }
+    const cid = getChildId() || c.id;
+    pushChildCloud(c, db.rates);
+    refreshLinkSnapshot(cid, c, db.rates);
+    toast('🎉 有理财已到期，本金＋利息已自动回到余额！');
+  }
   loggedChild = c;
   const balance = calcBalance(c);
   // 利率：优先用本地数据库的（家长同步过的），否则用分享链接带来的
@@ -1491,13 +1829,9 @@ function renderChildHome(){
     document.getElementById('goalText').textContent = '¥'+balance.toFixed(0)+' / ¥'+c.goal;
     document.getElementById('goalProgress').style.width = pct+'%';
     if(pct>=100){
-      document.getElementById('goalHint').textContent = '🎉 太棒了！目标已达成，可以和狗狗玩耍！';
-      document.getElementById('dogBtn').style.opacity = 1;
-      document.getElementById('dogHint').textContent = '目标已达成！来和狗狗玩耍吧！';
+      document.getElementById('goalHint').textContent = '🎉 太棒了！储蓄目标已达成！';
     } else {
       document.getElementById('goalHint').textContent = `再存 ¥${(c.goal-balance).toFixed(2)} 就能达成目标啦！`;
-      document.getElementById('dogBtn').style.opacity = 1;
-      document.getElementById('dogHint').textContent = '继续存钱，让狗狗更开心！';
     }
   } else {
     document.getElementById('goalText').textContent = '未设置';
@@ -1506,6 +1840,8 @@ function renderChildHome(){
   }
   // 交易明细
   document.getElementById('childTxList').innerHTML = renderTxList(c.transactions);
+  // 理财专区
+  renderWealthCard(c);
   // 审批结果状态
   const reqStatus = document.getElementById('reqStatus');
   const wb = document.getElementById('withdrawBtn');
@@ -1528,203 +1864,6 @@ function renderChildHome(){
   refreshBadge(c);
 }
 
-/* ====================== my-dog 游戏 ====================== */
-let game = null;
-function openDogGame(){
-  document.getElementById('dogGame').classList.remove('hidden');
-  document.getElementById('tabbar').style.display='none';
-}
-function closeDogGame(){
-  document.getElementById('dogGame').classList.add('hidden');
-  document.getElementById('tabbar').style.display='flex';
-  if(game){ cancelAnimationFrame(game.raf); game=null; }
-  document.getElementById('gameStart').style.display='flex';
-  document.getElementById('gameOver').style.display='none';
-  document.getElementById('gameHUD').style.display='none';
-}
-
-function startGame(){
-  document.getElementById('gameStart').style.display='none';
-  document.getElementById('gameOver').style.display='none';
-  document.getElementById('gameHUD').style.display='block';
-  const canvas = document.getElementById('gameCanvas');
-  const ctx = canvas.getContext('2d');
-  const resize = ()=>{
-    const r = canvas.parentElement.getBoundingClientRect();
-    canvas.width = r.width; canvas.height = r.height;
-  };
-  resize();
-  game = {
-    canvas, ctx, raf:null,
-    score:0,
-    dog:{x:canvas.width/2-40, y:canvas.height-90, w:80, h:70, vx:0, happy:0, bob:0},
-    bones:[], particles:[],
-    lastTime:performance.now(),
-    spawnTimer:0
-  };
-  // 控制
-  canvas.onpointermove = (e)=>{
-    const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    game.dog.x = Math.max(0, Math.min(canvas.width-game.dog.w, x-game.dog.w/2));
-  };
-  canvas.onpointerdown = (e)=>{
-    const r = canvas.getBoundingClientRect();
-    const x = e.clientX - r.left;
-    const y = e.clientY - r.top;
-    throwBone(x, y);
-  };
-  gameLoop();
-}
-
-function throwBone(targetX, targetY){
-  const canvas = game.canvas;
-  game.bones.push({
-    x: targetX, y: canvas.height-20,
-    vx: (Math.random()-.5)*2,
-    vy: -10 - Math.random()*3,
-    rot:0, vrot:(Math.random()-.5)*.3,
-    caught:false
-  });
-}
-
-function gameLoop(){
-  if(!game) return;
-  const now = performance.now();
-  const dt = Math.min(33, now - game.lastTime);
-  game.lastTime = now;
-  const ctx = game.ctx, canvas = game.canvas;
-  const dog = game.dog;
-
-  // 自动生成骨头（从天而降）
-  game.spawnTimer += dt;
-  if(game.spawnTimer > 1200){
-    game.spawnTimer = 0;
-    game.bones.push({
-      x: 30 + Math.random()*(canvas.width-60),
-      y: -20,
-      vx:0, vy: 2 + Math.random()*1.5,
-      rot:0, vrot:(Math.random()-.5)*.2,
-      caught:false, fromSky:true
-    });
-  }
-
-  // 更新骨头
-  game.bones.forEach(b=>{
-    b.x += b.vx; b.y += b.vy; b.rot += b.vrot;
-    if(!b.fromSky){ b.vy += 0.4; } // 投掷的重力
-    // 检测狗狗接住
-    if(!b.caught && b.y > dog.y && b.y < dog.y+dog.h &&
-       b.x > dog.x-10 && b.x < dog.x+dog.w+10){
-      b.caught = true;
-      game.score++;
-      dog.happy = 30;
-      document.getElementById('scoreNum').textContent = game.score;
-      // 粒子
-      for(let i=0;i<8;i++){
-        game.particles.push({
-          x:b.x, y:b.y,
-          vx:(Math.random()-.5)*4, vy:-Math.random()*4-1,
-          life:30, emoji:['❤️','⭐','✨'][i%3]
-        });
-      }
-    }
-  });
-  game.bones = game.bones.filter(b=>!b.caught && b.y < canvas.height+30 && b.y > -50);
-
-  // 更新粒子
-  game.particles.forEach(p=>{ p.x+=p.vx; p.y+=p.vy; p.vy+=0.2; p.life--; });
-  game.particles = game.particles.filter(p=>p.life>0);
-
-  // 狗狗开心抖动
-  if(dog.happy>0){ dog.happy--; dog.bob = Math.sin(dog.happy*.5)*3; }
-  else { dog.bob = 0; }
-
-  // 绘制
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  // 草地
-  ctx.fillStyle = '#7cb342';
-  ctx.fillRect(0, canvas.height-40, canvas.width, 40);
-  ctx.fillStyle = '#689f38';
-  for(let i=0;i<canvas.width;i+=20){
-    ctx.fillRect(i, canvas.height-44, 3, 6);
-  }
-  // 狗狗
-  drawDog(ctx, dog.x, dog.y+dog.bob, dog.w, dog.h, dog.happy>0);
-  // 骨头
-  game.bones.forEach(b=>{
-    ctx.save();
-    ctx.translate(b.x, b.y);
-    ctx.rotate(b.rot);
-    ctx.font = '24px serif';
-    ctx.textAlign='center';
-    ctx.fillText('🦴', 0, 8);
-    ctx.restore();
-  });
-  // 粒子
-  game.particles.forEach(p=>{
-    ctx.globalAlpha = p.life/30;
-    ctx.font='16px serif';
-    ctx.textAlign='center';
-    ctx.fillText(p.emoji, p.x, p.y);
-    ctx.globalAlpha = 1;
-  });
-
-  game.raf = requestAnimationFrame(gameLoop);
-}
-
-function drawDog(ctx, x, y, w, h, happy){
-  // 身体
-  ctx.fillStyle = '#8d6e63';
-  ctx.beginPath();
-  ctx.ellipse(x+w/2, y+h/2+5, w/2, h/2-5, 0, 0, Math.PI*2);
-  ctx.fill();
-  // 头
-  ctx.beginPath();
-  ctx.arc(x+w/2, y+25, 22, 0, Math.PI*2);
-  ctx.fill();
-  // 耳朵
-  ctx.fillStyle='#6d4c41';
-  ctx.beginPath();
-  ctx.ellipse(x+w/2-18, y+12, 8, 14, -.3, 0, Math.PI*2);
-  ctx.ellipse(x+w/2+18, y+12, 8, 14, .3, 0, Math.PI*2);
-  ctx.fill();
-  // 眼睛
-  ctx.fillStyle='#fff';
-  ctx.beginPath();
-  ctx.arc(x+w/2-8, y+22, 4, 0, Math.PI*2);
-  ctx.arc(x+w/2+8, y+22, 4, 0, Math.PI*2);
-  ctx.fill();
-  ctx.fillStyle='#000';
-  ctx.beginPath();
-  ctx.arc(x+w/2-8, y+22, 2, 0, Math.PI*2);
-  ctx.arc(x+w/2+8, y+22, 2, 0, Math.PI*2);
-  ctx.fill();
-  // 嘴
-  ctx.strokeStyle='#3e2723';
-  ctx.lineWidth=2;
-  ctx.beginPath();
-  if(happy){
-    ctx.arc(x+w/2, y+32, 7, 0, Math.PI);
-  } else {
-    ctx.arc(x+w/2, y+34, 5, 0.2, Math.PI-0.2);
-  }
-  ctx.stroke();
-  // 鼻子
-  ctx.fillStyle='#3e2723';
-  ctx.beginPath();
-  ctx.arc(x+w/2, y+30, 3, 0, Math.PI*2);
-  ctx.fill();
-  // 尾巴
-  ctx.strokeStyle='#8d6e63';
-  ctx.lineWidth=8;
-  ctx.lineCap='round';
-  ctx.beginPath();
-  ctx.moveTo(x+w-5, y+h/2);
-  ctx.quadraticCurveTo(x+w+12, y+h/2-10, x+w+8, y+h/2-20);
-  ctx.stroke();
-}
-
 /* ====================== 工具 ====================== */
 function closeModal(id){ document.getElementById(id).classList.add('hidden'); }
 function pad(n){ return n<10?'0'+n:n; }
@@ -1742,7 +1881,7 @@ function toast(msg){
 
 // 点击遮罩关闭
 document.querySelectorAll('.modal-mask').forEach(m=>{
-  m.addEventListener('click', e=>{ if(e.target===m && m.id!=='dogGame') m.classList.add('hidden'); });
+  m.addEventListener('click', e=>{ if(e.target===m) m.classList.add('hidden'); });
 });
 
 /* ====================== 桌面图标红点（App Badge）未读逻辑 ====================== */
