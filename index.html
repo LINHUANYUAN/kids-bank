@@ -839,6 +839,14 @@ function buildCloudData(c, rates){
   };
 }
 
+// 生成「分享链接内嵌的精简快照」：剔除姓名/出生日期/头像，既保护隐私、又缩短链接长度。
+// 链接自带数据 → 孩子任何情况下（云端失效/过期/离线）都能打开；云端仅作实时刷新增强。
+function buildShareSnapshot(c, rates){
+  const d = buildCloudData(c, rates);
+  delete d.n; delete d.b; delete d.p;
+  return d;
+}
+
 // 由「姓名+出生日期」派生稳定且 URL 安全的云端主题，使孩子换设备/本地数据丢失后仍能用姓名+出生日期登录
 function childLoginTopic(name, birth){
   const key = (name||'').trim() + '|' + (birth||'');
@@ -858,7 +866,7 @@ function pushChildCloud(c, rates){
 function cloudToChild(data, id){
   return {
     id: id || data.id,
-    name: data.n, birth: data.b, goal: data.g||0, photo: data.p||'',
+    name: data.n || '', birth: data.b || '', goal: data.g||0, photo: data.p||'',
     transactions: (data.t||[]).map((t,i)=>({
       id:'st'+i, type: t[0]===1?'in':'out', amount:t[1], note:t[2]||'', time:t[3]
     })),
@@ -911,12 +919,13 @@ function decodeSnapshot(snap){
     return cloudToChild(p, p.id);
   }catch(e){ return null; }
 }
-// 用最新数据刷新链接内嵌快照（replaceState 不新增历史记录），保证链接永不过期
+// 用最新数据刷新链接内嵌快照（replaceState 不新增历史记录）：重新内嵌精简快照，
+// 保证链接始终自带数据、永不过期，且不含姓名
 function refreshLinkSnapshot(id, c, rates){
   try{
-    // 短链接：仅保留孩子ID，云端作为数据来源
     if(id && id !== 'shared'){
-      history.replaceState(null, '', location.pathname + '#k=' + id);
+      const snap = btoa(unescape(encodeURIComponent(JSON.stringify(buildShareSnapshot(c, rates)))));
+      history.replaceState(null, '', location.pathname + '#k=' + id + '~' + snap);
     }
   }catch(e){}
 }
@@ -1168,21 +1177,22 @@ function shareChild(id){
   const c = db.children.find(x=>x.id===id);
   if(!c) return;
   const cloudData = buildCloudData(c, db.rates);
-  // 短链接：仅含孩子ID，云端作为数据来源；孩子打开时从云端拉取最新数据
-  const url = location.origin + location.pathname + '#k=' + id;
-  const shareText = `🏦 【${c.name}的小金库】\n点击链接直接查看你的余额和利息：\n${url}\n\n💰 每日利息正在帮你赚钱哦！\n🔄 打开即可看到最新数据`;
+  // 链接内嵌精简快照（不含姓名，更短且保护隐私）：孩子打开即能看到数据，云端仅作实时刷新增强
+  const snap = btoa(unescape(encodeURIComponent(JSON.stringify(buildShareSnapshot(c, db.rates)))));
+  const url = location.origin + location.pathname + '#k=' + id + '~' + snap;
+  const shareText = `🏦 点开下面的链接，就能打开你的小金库，查看余额和每天的利息：\n${url}\n\n💰 每日利息正在帮你赚钱哦！`;
 
-  // 同步到云端（数据来源）；孩子打开链接时从云端拉取最新数据
+  // 同步到云端（实时刷新增强）；即使云端失效，链接内嵌快照也能保证孩子打开
   toast('⏳ 正在同步到云端...');
   pushChildCloud(c, db.rates);
   if(navigator.share){
-    navigator.share({title:c.name+'的小金库', text:shareText, url:url}).catch(()=>{
+    navigator.share({title:'我的小金库', text:shareText, url:url}).catch(()=>{
       copyShare(shareText);
     });
   } else {
     copyShare(shareText);
   }
-  toast('✅ 分享链接已生成（已同步到云端）');
+  toast('✅ 分享链接已生成（链接自带数据，离线也能打开）');
 }
 function copyShare(text){
   if(navigator.clipboard){
@@ -1645,7 +1655,7 @@ async function loadCloudChild(childId, snap){
     cacheChild(recovered);
     // 回写云端 + 刷新链接内嵌快照，保证链接永不过期、下次打开必定能开
     pushToCloud(childId, buildCloudData(recovered, db.rates));
-    pushToCloud(childLoginTopic(recovered.name, recovered.birth), buildCloudData(recovered, db.rates));
+    if(recovered.name && recovered.birth) pushToCloud(childLoginTopic(recovered.name, recovered.birth), buildCloudData(recovered, db.rates));
     refreshLinkSnapshot(childId, recovered, db.rates);
     sharedChildData = recovered;
     loggedChild = recovered;
@@ -1667,7 +1677,7 @@ async function loadCloudChild(childId, snap){
       renderChildHome();
       // 自愈：用快照把云端数据补回来，避免下次仍取不到
       pushToCloud(childId, buildCloudData(c, db.rates));
-      pushToCloud(childLoginTopic(c.name, c.birth), buildCloudData(c, db.rates));
+      if(c.name && c.birth) pushToCloud(childLoginTopic(c.name, c.birth), buildCloudData(c, db.rates));
       cacheChild(c);
       // 链接自带数据兜底，静默打开，不弹干扰提示
       return;
@@ -1683,7 +1693,7 @@ async function loadCloudChild(childId, snap){
     document.getElementById('childHome').classList.remove('hidden');
     renderChildHome();
     pushToCloud(childId, buildCloudData(cached, db.rates));
-    pushToCloud(childLoginTopic(cached.name, cached.birth), buildCloudData(cached, db.rates));
+    if(cached.name && cached.birth) pushToCloud(childLoginTopic(cached.name, cached.birth), buildCloudData(cached, db.rates));
     // 本地缓存兜底，静默打开，不弹干扰提示
     return;
   }
@@ -1694,19 +1704,21 @@ async function loadCloudChild(childId, snap){
 
 // 孩子端静默刷新：打开期间定时拉取最新数据（家长存/取后孩子无需手动刷新即可看到）
 function silentRefreshChild(){
-  const { id } = parseShareHash();
-  if(!id || id === 'shared') return;
+  const shareId = parseShareHash().id;
+  let id = shareId;
+  if(!id || id === 'shared'){ id = (loggedChild && loggedChild.id) || null; }
+  if(!id) return;
   if(!navigator.onLine) return;
   if(document.querySelector('.modal-mask:not(.hidden)')) return; // 弹窗打开时不打断
   pullFromCloud(id).then(data=>{
     if(!data) return;
     const db = getDB();
-    const recovered = cloudToChild(data, data.id);
+    const recovered = cloudToChild(data, data.id || id);
     const ex = db.children.find(x=>x.id===recovered.id);
     if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
     saveDB(db);
     cacheChild(recovered);
-    refreshLinkSnapshot(id, recovered, db.rates);
+    if(shareId) refreshLinkSnapshot(shareId, recovered, db.rates); // 仅分享模式才重写链接快照
     sharedChildData = recovered;
     loggedChild = recovered;
     renderChildHome();
@@ -1762,34 +1774,44 @@ function childLogout(){
   }
 }
 
-// 刷新云端数据
+// 刷新云端数据（支持分享链接模式与本地登录模式；云端取不到时回退到链接自带快照）
 async function refreshCloudData(){
-  const { id } = parseShareHash();
-  if(!id || id === 'shared'){
+  const shareId = parseShareHash().id;
+  let id = shareId;
+  if(!id || id === 'shared'){ id = (loggedChild && loggedChild.id) || null; }
+  if(!id){
     toast('当前是本地模式，刷新页面即可');
     return;
   }
   const btn = document.getElementById('refreshBtn');
   btn.textContent = '⏳ 刷新中...';
   btn.disabled = true;
-  const data = await pullFromCloud(id);
+  let data = await pullFromCloud(id);
+  let fromCloud = !!data;
+  // 云端取不到：尝试用链接自带快照兜底，保证刷新总能显示数据
+  if(!data){
+    const { snap } = parseShareHash();
+    if(snap){ data = decodeSnapshot(snap); }
+  }
   btn.textContent = '🔄 刷新最新数据';
   btn.disabled = false;
   if(!data){
-    toast('⚠️ 暂时无法刷新，请稍后重试');
+    // 仍取不到（无云端、也无快照）：保留当前本地数据，友好提示，不报错
+    if(loggedChild){ renderChildHome(); toast('📡 当前为离线数据，联网后会自动更新'); }
+    else toast('⚠️ 暂时无法刷新，请稍后重试');
     return;
   }
   const db = getDB();
-  const recovered = cloudToChild(data, data.id);
+  const recovered = cloudToChild(data, data.id || id);
   const ex = db.children.find(x=>x.id===recovered.id);
   if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
   saveDB(db);
   cacheChild(recovered);
-  refreshLinkSnapshot(id, recovered, db.rates);
+  if(shareId) refreshLinkSnapshot(shareId, recovered, db.rates);
   sharedChildData = recovered;
   loggedChild = recovered;
   renderChildHome();
-  toast('✅ 已更新到最新数据');
+  toast(fromCloud ? '✅ 已更新到最新数据' : '✅ 已用分享链接数据刷新');
 }
 
 function renderChildHome(){
@@ -1802,9 +1824,9 @@ function renderChildHome(){
   if(checkWealthRedeem(c)){
     const ex = db.children.find(x=>x.id===c.id);
     if(ex){ Object.assign(ex, c); saveDB(db); }
-    const cid = getChildId() || c.id;
+    const cid = getChildId();
     pushChildCloud(c, db.rates);
-    refreshLinkSnapshot(cid, c, db.rates);
+    if(cid) refreshLinkSnapshot(cid, c, db.rates);
     toast('🎉 有理财已到期，本金＋利息已自动回到余额！');
   }
   loggedChild = c;
@@ -1814,14 +1836,15 @@ function renderChildHome(){
   const rateDate = c.sharedRateDate || db.rates.date;
   const daily = calcDailyInterest(balance, rate);
   const totalInterest = calcTotalInterest(c, rate);
-  document.getElementById('hiName').textContent = c.name;
-  // 头像：有照片显示照片，否则显示名字首字
+  const displayName = c.name || '我的小金库';
+  document.getElementById('hiName').textContent = displayName;
+  // 头像：有照片显示照片，否则显示名字首字（无姓名时显示💰）
   const av = document.getElementById('childAvatar');
   if(c.photo){
-    av.innerHTML = `<img src="${c.photo}" alt="${c.name}">`;
+    av.innerHTML = `<img src="${c.photo}" alt="${displayName}">`;
     av.style.background = 'rgba(255,255,255,.25)';
   } else {
-    av.textContent = c.name.charAt(0);
+    av.textContent = c.name ? c.name.charAt(0) : '💰';
     av.style.background = 'rgba(255,255,255,.25)';
   }
   document.getElementById('childBalance').textContent = '¥'+balance.toFixed(2);
