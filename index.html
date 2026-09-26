@@ -742,14 +742,17 @@ async function pushToCloud(childId, data){
 // 从云端拉取孩子最新数据
 async function pullFromCloud(childId){
   const topic = NTFY_BASE + childId;
+  // 用 AbortController 设 6 秒硬超时：空主题/网络不通时快速失败，避免长轮询卡住页面
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), 6000);
   try{
-    const resp = await fetch(topic + '/json?poll=1&since=all', {method:'GET'});
+    // 不使用 poll=1（长轮询会在空主题时挂起数秒），since=all 直接返回已缓存消息
+    const resp = await fetch(topic + '/json?since=all', {method:'GET', signal: ctrl.signal});
+    clearTimeout(timer);
     if(!resp.ok) return null;
     const text = await resp.text();
-    // ntfy 返回 JSON Lines 格式（每行一条消息）
     const lines = text.trim().split('\n').filter(l=>l.trim());
     if(!lines.length) return null;
-    // 取最后一条 message 类型的消息
     let lastData = null;
     for(const line of lines){
       try{
@@ -761,7 +764,8 @@ async function pullFromCloud(childId){
     }
     return lastData;
   }catch(e){
-    return null;
+    clearTimeout(timer);
+    return null;  // 超时/网络错误 → 返回 null，由上层用链接快照/本地缓存兜底
   }
 }
 
@@ -820,11 +824,41 @@ function loadCachedChild(id){
 /* ====================== 取钱申请与审批 ====================== */
 const NTFY_REQ_BASE = 'https://ntfy.sh/kidsbank_req_';
 
+// 解析分享链接：#k=<id>~<base64快照> 或旧式 #d=<base64快照>
+// 链接内嵌完整数据快照，使孩子任何时间打开都能看到数据（云端仅作实时刷新增强）
+function parseShareHash(){
+  const h = location.hash || '';
+  if(h.startsWith('#k=')){
+    const body = h.slice(3);
+    const i = body.indexOf('~');
+    if(i >= 0) return { id: body.slice(0, i), snap: body.slice(i+1) };
+    return { id: body, snap: null };
+  }
+  if(h.startsWith('#d=')){
+    return { id: 'shared', snap: h.slice(3) };
+  }
+  return { id: null, snap: null };
+}
+// 解码链接内嵌的 base64 快照 → 本地孩子对象
+function decodeSnapshot(snap){
+  try{
+    const json = decodeURIComponent(escape(atob(snap)));
+    const p = JSON.parse(json);
+    return cloudToChild(p, p.id);
+  }catch(e){ return null; }
+}
+// 用最新数据刷新链接内嵌快照（replaceState 不新增历史记录），保证链接永不过期
+function refreshLinkSnapshot(id, c, rates){
+  try{
+    const snap = btoa(unescape(encodeURIComponent(JSON.stringify(buildCloudData(c, rates)))));
+    history.replaceState(null, '', location.pathname + '#k=' + id + '~' + snap);
+  }catch(e){}
+}
 // 获取当前孩子的真实ID
 function getChildId(){
-  if(loggedChild && loggedChild.id !== 'shared') return loggedChild.id;
-  if(location.hash.startsWith('#k=')) return location.hash.slice(3);
-  if(loggedChild && loggedChild.id) return loggedChild.id;
+  const { id } = parseShareHash();
+  if(id && id !== 'shared') return id;
+  if(loggedChild && loggedChild.id && loggedChild.id !== 'shared') return loggedChild.id;
   return null;
 }
 
@@ -892,7 +926,10 @@ async function pullRequests(){
   const allRaw = [];
   for(const c of db.children){
     try{
-      const resp = await fetch(NTFY_REQ_BASE + c.id + '/json?poll=1&since=all');
+      const ctrl = new AbortController();
+      const t = setTimeout(()=>ctrl.abort(), 6000);
+      const resp = await fetch(NTFY_REQ_BASE + c.id + '/json?since=all', {signal: ctrl.signal});
+      clearTimeout(t);
       if(!resp.ok) continue;
       const text = await resp.text();
       const lines = text.trim().split('\n').filter(l=>l.trim());
@@ -1065,32 +1102,22 @@ function shareChild(id){
   const c = db.children.find(x=>x.id===id);
   if(!c) return;
   const cloudData = buildCloudData(c, db.rates);
-  const url = location.origin + location.pathname + '#k=' + id;
+  // 把完整数据快照编进链接：链接自带数据、永不过期，云端仅作实时刷新增强
+  const snap = btoa(unescape(encodeURIComponent(JSON.stringify(cloudData))));
+  const url = location.origin + location.pathname + '#k=' + id + '~' + snap;
   const shareText = `🏦 【${c.name}的小金库】\n点击链接直接查看你的余额和利息：\n${url}\n\n💰 每日利息正在帮你赚钱哦！\n🎯 继续存钱，达成目标可以玩狗狗游戏！\n\n（链接永久有效，随时刷新看最新数据）`;
-  
-  // 先推送到云端，再分享链接
+
+  // 同步到云端（实时刷新增强）；即使云端失效，链接内嵌快照也能保证孩子打开
   toast('⏳ 正在同步到云端...');
-  pushToCloud(id, cloudData).then(ok=>{
-    // 关键修复：同时把数据写入「姓名+出生日期」登录主题，使孩子默认（输姓名+出生日期）登录也能云端找回
-    pushChildCloud(c, db.rates);
-    if(ok){
-      toast('✅ 已同步，链接可分享了');
-      if(navigator.share){
-        navigator.share({title:c.name+'的小金库', text:shareText, url:url}).catch(()=>{
-          copyShare(shareText);
-        });
-      } else {
-        copyShare(shareText);
-      }
-    } else {
-      // 云端失败，降级为旧方案（数据编码在URL里）
-      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(cloudData))));
-      const fallbackUrl = location.origin + location.pathname + '#d=' + encoded;
-      const fallbackText = `🏦 【${c.name}的小金库】\n点击链接查看余额和利息：\n${fallbackUrl}\n\n⚠️ 注意：此链接是快照，家长修改后需重新分享`;
-      copyShare(fallbackText);
-      toast('⚠️ 云端同步失败，已生成快照链接（修改后需重新分享）');
-    }
-  });
+  pushChildCloud(c, db.rates);
+  if(navigator.share){
+    navigator.share({title:c.name+'的小金库', text:shareText, url:url}).catch(()=>{
+      copyShare(shareText);
+    });
+  } else {
+    copyShare(shareText);
+  }
+  toast('✅ 链接已生成（含最新数据，永不过期）');
 }
 function copyShare(text){
   if(navigator.clipboard){
@@ -1235,41 +1262,33 @@ let childAwaiting = false;   // 孩子端是否已有申请在等待审批
 let sharedChildData = null;  // 从分享链接解析的数据
 
 function renderChild(){
-  const hash = location.hash;
-  
-  // 云端同步模式：#k=<childId> —— 从云端拉取最新数据
-  if(hash.startsWith('#k=')){
-    const childId = hash.slice(3);
-    loadCloudChild(childId);
-    return;
-  }
-  
-  // 快照模式（旧）：#d=<base64编码的账户数据>
-  if(hash.startsWith('#d=')){
-    try{
-      const json = decodeURIComponent(escape(atob(hash.slice(3))));
-      const p = JSON.parse(json);
-      sharedChildData = {
-        id:'shared', name:p.n, birth:p.b, goal:p.g||0, photo:p.p||'',
-        transactions: (p.t||[]).map((t,i)=>({
-          id:'st'+i, type: t[0]===1?'in':'out',
-          amount:t[1], note:t[2]||'', time:t[3]
-        })),
-        sharedRate: p.r, sharedRateDate: p.rd
-      };
-      loggedChild = sharedChildData;
+  const { id, snap } = parseShareHash();
+
+  // 纯快照链接（旧式 #d=）：直接打开，无需云端
+  if(snap && (!id || id === 'shared')){
+    const c = decodeSnapshot(snap);
+    if(c){
+      sharedChildData = c; loggedChild = c;
       document.getElementById('loginPage').classList.add('hidden');
       document.getElementById('childHome').classList.remove('hidden');
       renderChildHome();
-    }catch(e){
-      toast('⚠️ 分享链接已失效，请让爸爸妈妈重新分享');
+      toast('✅ 已加载最新数据');
+    }else{
+      toast('⚠️ 分享链接已失效，请让管理员重新分享');
     }
+    return;
+  }
+
+  // 云端同步模式 #k=<childId>：优先云端最新，失败则用链接内嵌快照兜底
+  if(id){
+    loadCloudChild(id, snap);
   }
 }
 
-// 从云端加载孩子数据
-async function loadCloudChild(childId){
-  // 先显示加载中
+// 从云端加载孩子数据；云端取不到时依次用「链接内嵌快照」→「本地缓存」兜底，保证任何时间都能打开
+async function loadCloudChild(childId, snap){
+  // 显示加载中
+  const oldL = document.getElementById('cloudLoading'); if(oldL) oldL.remove();
   document.getElementById('loginPage').classList.add('hidden');
   document.getElementById('childHome').classList.add('hidden');
   const loadingDiv = document.createElement('div');
@@ -1283,17 +1302,17 @@ async function loadCloudChild(childId){
   loadingDiv.remove();
   const db = getDB();
 
+  // ① 云端有数据：用最新数据
   if(data){
-    const recovered = cloudToChild(data, data.id);  // 用云端真实 id（如 c1786805717399）
-    // 存进本地 + 本地缓存：退出后用「姓名+出生日期」默认登录也能命中；云端取不到时仍可打开
+    const recovered = cloudToChild(data, data.id);
     const ex = db.children.find(x=>x.id===recovered.id);
     if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
     saveDB(db);
     cacheChild(recovered);
-    // 用刚拉到的最新数据回写云端，刷新 ntfy 缓存时间戳，避免 12 小时缓存过期后孩子打不开
-    // 同时刷新「姓名+出生日期」登录主题，保证两种登录方式都不因缓存过期而失效
+    // 回写云端 + 刷新链接内嵌快照，保证链接永不过期、下次打开必定能开
     pushToCloud(childId, buildCloudData(recovered, db.rates));
     pushToCloud(childLoginTopic(recovered.name, recovered.birth), buildCloudData(recovered, db.rates));
+    refreshLinkSnapshot(childId, recovered, db.rates);
     sharedChildData = recovered;
     loggedChild = recovered;
     document.getElementById('loginPage').classList.add('hidden');
@@ -1303,7 +1322,25 @@ async function loadCloudChild(childId){
     return;
   }
 
-  // 云端取不到（网络不通 / ntfy 缓存过期）：优先用本地缓存，保证孩子任何时间都能打开页面
+  // ② 云端取不到（空主题/过期/网络不通）：用链接内嵌快照 —— 链接自带数据，永不过期，且一定是本孩子的数据
+  if(snap){
+    const c = decodeSnapshot(snap);
+    if(c){
+      sharedChildData = c;
+      loggedChild = c;
+      document.getElementById('loginPage').classList.add('hidden');
+      document.getElementById('childHome').classList.remove('hidden');
+      renderChildHome();
+      // 自愈：用快照把云端数据补回来，避免下次仍取不到
+      pushToCloud(childId, buildCloudData(c, db.rates));
+      pushToCloud(childLoginTopic(c.name, c.birth), buildCloudData(c, db.rates));
+      cacheChild(c);
+      toast('⚠️ 云端暂时无响应，已用链接自带数据打开（可能不是最新）');
+      return;
+    }
+  }
+
+  // ③ 再用本地缓存兜底
   const cached = loadCachedChild(childId) || db.children.find(x=>x.id===childId) || null;
   if(cached){
     sharedChildData = cached;
@@ -1311,10 +1348,9 @@ async function loadCloudChild(childId){
     document.getElementById('loginPage').classList.add('hidden');
     document.getElementById('childHome').classList.remove('hidden');
     renderChildHome();
-    toast('⚠️ 网络暂时不通，已用本地缓存数据打开（可能不是最新，联网后会自动更新）');
-    // 自愈：用本地缓存把云端数据补回来（任何持有缓存的设备都能修复云端，避免永久打不开）
     pushToCloud(childId, buildCloudData(cached, db.rates));
     pushToCloud(childLoginTopic(cached.name, cached.birth), buildCloudData(cached, db.rates));
+    toast('⚠️ 网络暂时不通，已用本地缓存数据打开（可能不是最新，联网后会自动更新）');
     return;
   }
 
@@ -1324,10 +1360,10 @@ async function loadCloudChild(childId){
 
 // 孩子端静默刷新：打开期间定时拉取最新数据（家长存/取后孩子无需手动刷新即可看到）
 function silentRefreshChild(){
-  if(!location.hash.startsWith('#k=')) return;
+  const { id } = parseShareHash();
+  if(!id || id === 'shared') return;
   if(!navigator.onLine) return;
   if(document.querySelector('.modal-mask:not(.hidden)')) return; // 弹窗打开时不打断
-  const id = location.hash.slice(3);
   pullFromCloud(id).then(data=>{
     if(!data) return;
     const db = getDB();
@@ -1336,6 +1372,7 @@ function silentRefreshChild(){
     if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
     saveDB(db);
     cacheChild(recovered);
+    refreshLinkSnapshot(id, recovered, db.rates);
     sharedChildData = recovered;
     loggedChild = recovered;
     renderChildHome();
@@ -1393,31 +1430,30 @@ function childLogout(){
 
 // 刷新云端数据
 async function refreshCloudData(){
-  if(!location.hash.startsWith('#k=')){
+  const { id } = parseShareHash();
+  if(!id || id === 'shared'){
     toast('当前是本地模式，刷新页面即可');
     return;
   }
-  const childId = location.hash.slice(3);
   const btn = document.getElementById('refreshBtn');
   btn.textContent = '⏳ 刷新中...';
   btn.disabled = true;
-  const data = await pullFromCloud(childId);
+  const data = await pullFromCloud(id);
   btn.textContent = '🔄 刷新最新数据';
   btn.disabled = false;
   if(!data){
     toast('⚠️ 暂时无法刷新，请稍后重试');
     return;
   }
-  sharedChildData = {
-    id:'shared', name:data.n, birth:data.b, goal:data.g||0, photo:data.p||'',
-    transactions: (data.t||[]).map((t,i)=>({
-      id:'st'+i, type: t[0]===1?'in':'out',
-      amount:t[1], note:t[2]||'', time:t[3]
-    })),
-    sharedRate: data.r, sharedRateDate: data.rd,
-    lastReqResult: data.rq || null
-  };
-  loggedChild = sharedChildData;
+  const db = getDB();
+  const recovered = cloudToChild(data, data.id);
+  const ex = db.children.find(x=>x.id===recovered.id);
+  if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+  saveDB(db);
+  cacheChild(recovered);
+  refreshLinkSnapshot(id, recovered, db.rates);
+  sharedChildData = recovered;
+  loggedChild = recovered;
   renderChildHome();
   toast('✅ 已更新到最新数据');
 }
@@ -1787,6 +1823,13 @@ window.addEventListener('online', flushCloudPushQueue);
 flushCloudPushQueue();
 // 孩子端打开期间每 25 秒静默刷新一次，自动获取家长最新数据
 setInterval(silentRefreshChild, 25000);
+// 在同一浏览器标签内粘贴不同的分享链接时，重新加载对应孩子（避免停留在上一个孩子的数据）
+window.addEventListener('hashchange', ()=>{
+  if(location.hash.startsWith('#k=') || location.hash.startsWith('#d=')){
+    isSharedMode = true;
+    switchRole('child');
+  }
+});
 </script>
 </body>
 </html>
