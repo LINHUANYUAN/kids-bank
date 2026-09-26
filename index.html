@@ -337,7 +337,7 @@ select.role-select{padding:11px 14px}
         <button class="btn flex-1" id="payZfb" onclick="setPayMethod('支付宝')" style="background:#e5e7eb;color:#6b7280;opacity:.6">💙 支付宝</button>
       </div>
       <div style="background:#fff7ed;border-radius:8px;padding:10px;margin-top:12px;font-size:13px;color:#92400e">
-        📨 申请将发送给爸爸妈妈审批
+        📨 申请将发送给管理员审批
       </div>
       <div class="flex" style="margin-top:18px">
         <button class="btn btn-ghost flex-1" onclick="closeModal('withdrawReqModal')">取消</button>
@@ -703,19 +703,40 @@ function deleteChild(id){
 // ntfy.sh 是免费公共服务，无需注册，用于家长→孩子的数据同步
 const NTFY_BASE = 'https://ntfy.sh/kidsbank_';
 
-// 把孩子数据推送到云端
-async function pushToCloud(childId, data){
-  const topic = NTFY_BASE + childId;
+// 云端推送失败重试队列（保证离线/弱网时数据最终也能上传）
+function enqueueCloudPush(childId, data){
   try{
-    await fetch(topic, {
-      method:'POST',
-      body: JSON.stringify(data),
-      headers:{'Content-Type':'application/json'}
-    });
-    return true;
-  }catch(e){
-    return false;
+    const q = JSON.parse(localStorage.getItem('kb_pushq')||'[]');
+    q.push({id:childId, d:data, t:Date.now()});
+    localStorage.setItem('kb_pushq', JSON.stringify(q.slice(-60))); // 最多保留 60 条
+  }catch(e){}
+}
+async function flushCloudPushQueue(){
+  let q;
+  try{ q = JSON.parse(localStorage.getItem('kb_pushq')||'[]'); }catch(e){ q=[]; }
+  if(!q.length) return;
+  const remain=[];
+  for(const item of q){
+    try{
+      const resp = await fetch(NTFY_BASE + item.id, {method:'POST', body:JSON.stringify(item.d), headers:{'Content-Type':'application/json','Cache':'720h'}});
+      if(!resp.ok) remain.push(item);
+    }catch(e){ remain.push(item); }
   }
+  try{ localStorage.setItem('kb_pushq', JSON.stringify(remain)); }catch(e){}
+}
+// 单次推送
+async function pushToCloudOnce(childId, data){
+  const resp = await fetch(NTFY_BASE + childId, {method:'POST', body:JSON.stringify(data), headers:{'Content-Type':'application/json','Cache':'720h'}});
+  return resp.ok;
+}
+// 把孩子数据推送到云端（自带重试 + 失败补传，确保每次更新都能上云）
+async function pushToCloud(childId, data){
+  for(let attempt=1; attempt<=3; attempt++){
+    try{ if(await pushToCloudOnce(childId, data)) return true; }catch(e){}
+    await new Promise(r=>setTimeout(r, 350*attempt)); // 退避重试
+  }
+  enqueueCloudPush(childId, data); // 最终失败：入队，待网络恢复/下次打开时补传
+  return false;
 }
 
 // 从云端拉取孩子最新数据
@@ -784,6 +805,18 @@ function cloudToChild(data, id){
   };
 }
 
+// 本地缓存孩子云端数据：云端取不到（网络不通 / ntfy 缓存过期）时仍可打开页面
+function cacheChild(c){
+  try{ localStorage.setItem('kb_cache_'+c.id, JSON.stringify(buildCloudData(c, getDB().rates))); }catch(e){}
+}
+function loadCachedChild(id){
+  try{
+    const s = localStorage.getItem('kb_cache_'+id);
+    if(!s) return null;
+    return cloudToChild(JSON.parse(s), id);
+  }catch(e){ return null; }
+}
+
 /* ====================== 取钱申请与审批 ====================== */
 const NTFY_REQ_BASE = 'https://ntfy.sh/kidsbank_req_';
 
@@ -837,11 +870,11 @@ async function submitWithdrawReq(){
   try{
     await fetch(NTFY_REQ_BASE + childId, {
       method:'POST', body:JSON.stringify(req),
-      headers:{'Content-Type':'application/json'}
+      headers:{'Content-Type':'application/json','Cache':'720h'}
     });
     closeModal('withdrawReqModal');
-    toast('✅ 申请已发送给爸爸妈妈');
-    document.getElementById('reqStatus').innerHTML = '<div style="background:#fff7ed;border-radius:10px;padding:10px;font-size:13px;color:#92400e;margin-bottom:8px">⏳ 取钱 ¥'+amount.toFixed(2)+'（'+note+' · '+curPayMethod+'）<br>等待爸爸妈妈审批中...</div>';
+    toast('✅ 申请已发送给管理员');
+    document.getElementById('reqStatus').innerHTML = '<div style="background:#fff7ed;border-radius:10px;padding:10px;font-size:13px;color:#92400e;margin-bottom:8px">⏳ 取钱 ¥'+amount.toFixed(2)+'（'+note+' · '+curPayMethod+'）<br>等待管理员审批中...</div>';
     // 等待审批期间禁用申请按钮，避免重复提交
     childAwaiting = true;
     const wb = document.getElementById('withdrawBtn');
@@ -1245,28 +1278,68 @@ async function loadCloudChild(childId){
   loadingDiv.style.textAlign = 'center';
   loadingDiv.innerHTML = '<div style="font-size:40px">🏦</div><p style="margin-top:10px;color:#6b7280">正在加载小金库...</p>';
   document.querySelector('#childApp .wrap').insertBefore(loadingDiv, document.getElementById('loginPage'));
-  
+
   const data = await pullFromCloud(childId);
   loadingDiv.remove();
-  
-  if(!data){
-    document.getElementById('loginPage').classList.remove('hidden');
-    toast('⚠️ 暂时无法连接，请检查网络后刷新重试');
+  const db = getDB();
+
+  if(data){
+    const recovered = cloudToChild(data, data.id);  // 用云端真实 id（如 c1786805717399）
+    // 存进本地 + 本地缓存：退出后用「姓名+出生日期」默认登录也能命中；云端取不到时仍可打开
+    const ex = db.children.find(x=>x.id===recovered.id);
+    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+    saveDB(db);
+    cacheChild(recovered);
+    // 用刚拉到的最新数据回写云端，刷新 ntfy 缓存时间戳，避免 12 小时缓存过期后孩子打不开
+    // 同时刷新「姓名+出生日期」登录主题，保证两种登录方式都不因缓存过期而失效
+    pushToCloud(childId, buildCloudData(recovered, db.rates));
+    pushToCloud(childLoginTopic(recovered.name, recovered.birth), buildCloudData(recovered, db.rates));
+    sharedChildData = recovered;
+    loggedChild = recovered;
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('childHome').classList.remove('hidden');
+    renderChildHome();
+    toast('✅ 已加载最新数据');
     return;
   }
-  
-  const recovered = cloudToChild(data, data.id);  // 用云端真实 id（如 c1786805717399）
-  // 关键修复：把云端孩子存进本地，退出登录后用「姓名+出生日期」默认登录也能直接命中，不再反复提示不对
-  const db = getDB();
-  const ex = db.children.find(x=>x.id===recovered.id);
-  if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
-  saveDB(db);
-  sharedChildData = recovered;
-  loggedChild = recovered;
-  document.getElementById('loginPage').classList.add('hidden');
-  document.getElementById('childHome').classList.remove('hidden');
-  renderChildHome();
-  toast('✅ 已加载最新数据');
+
+  // 云端取不到（网络不通 / ntfy 缓存过期）：优先用本地缓存，保证孩子任何时间都能打开页面
+  const cached = loadCachedChild(childId) || db.children.find(x=>x.id===childId) || null;
+  if(cached){
+    sharedChildData = cached;
+    loggedChild = cached;
+    document.getElementById('loginPage').classList.add('hidden');
+    document.getElementById('childHome').classList.remove('hidden');
+    renderChildHome();
+    toast('⚠️ 网络暂时不通，已用本地缓存数据打开（可能不是最新，联网后会自动更新）');
+    // 自愈：用本地缓存把云端数据补回来（任何持有缓存的设备都能修复云端，避免永久打不开）
+    pushToCloud(childId, buildCloudData(cached, db.rates));
+    pushToCloud(childLoginTopic(cached.name, cached.birth), buildCloudData(cached, db.rates));
+    return;
+  }
+
+  document.getElementById('loginPage').classList.remove('hidden');
+  toast('⚠️ 暂时无法连接，请检查网络后刷新重试');
+}
+
+// 孩子端静默刷新：打开期间定时拉取最新数据（家长存/取后孩子无需手动刷新即可看到）
+function silentRefreshChild(){
+  if(!location.hash.startsWith('#k=')) return;
+  if(!navigator.onLine) return;
+  if(document.querySelector('.modal-mask:not(.hidden)')) return; // 弹窗打开时不打断
+  const id = location.hash.slice(3);
+  pullFromCloud(id).then(data=>{
+    if(!data) return;
+    const db = getDB();
+    const recovered = cloudToChild(data, data.id);
+    const ex = db.children.find(x=>x.id===recovered.id);
+    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+    saveDB(db);
+    cacheChild(recovered);
+    sharedChildData = recovered;
+    loggedChild = recovered;
+    renderChildHome();
+  }).catch(()=>{});
 }
 
 async function childLogin(){
@@ -1406,7 +1479,7 @@ function renderChildHome(){
     if(wb){ wb.disabled = false; wb.style.opacity = 1; }
     const rq = c.lastReqResult || c.rq;
     if(rq.status === 'approved'){
-      reqStatus.innerHTML = '<div style="background:#dcfce7;border-radius:10px;padding:10px;font-size:13px;color:#15803d;margin-bottom:8px">✅ 爸爸妈妈同意了你的取钱申请！¥'+rq.amount.toFixed(2)+'（'+(rq.note||'')+'）已取出</div>';
+      reqStatus.innerHTML = '<div style="background:#dcfce7;border-radius:10px;padding:10px;font-size:13px;color:#15803d;margin-bottom:8px">✅ 管理员同意了你的取钱申请！¥'+rq.amount.toFixed(2)+'（'+(rq.note||'')+'）已取出</div>';
     } else if(rq.status === 'rejected'){
       reqStatus.innerHTML = '<div style="background:#fee2e2;border-radius:10px;padding:10px;font-size:13px;color:#b91c1c;margin-bottom:8px">❌ 取钱申请被拒绝<br>理由：'+(rq.reason||'家长未填写')+'</div>';
     }
@@ -1693,12 +1766,27 @@ function refreshBadge(c){
     const role = localStorage.getItem(ROLE_KEY) || 'parent';
     switchRole(role);
   }
+  // 家长端启动即把所有孩子数据重新同步到云端（刷新 30 天保留），
+  // 防止 ntfy 缓存过期导致孩子打不开；也避免弱网下数据没真正上云
+  resyncAllChildrenToCloud();
 })();
+
+// 家长端应用启动时，把所有孩子数据重新同步到云端（刷新 30 天保留，避免缓存过期后孩子打不开）
+function resyncAllChildrenToCloud(){
+  const db = getDB();
+  (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates); });
+}
 
 // 注册 Service Worker：支持"添加到主屏幕"与桌面图标红点/离线访问
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
 }
+// 联网后自动补传此前失败的云端推送，保证数据最终一致
+window.addEventListener('online', flushCloudPushQueue);
+// 启动时尝试补传一次
+flushCloudPushQueue();
+// 孩子端打开期间每 25 秒静默刷新一次，自动获取家长最新数据
+setInterval(silentRefreshChild, 25000);
 </script>
 </body>
 </html>
