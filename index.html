@@ -271,11 +271,22 @@ select.role-select{padding:11px 14px}
         <h2 style="margin:8px 0 4px">登录我的小金库</h2>
         <p class="muted" style="font-size:13px">请输入你的账号和密码</p>
       </div>
-      <label style="margin-top:16px">账号</label>
-      <input id="loginUser" placeholder="如：xiaoming" maxlength="20" autocapitalize="off" autocorrect="off" spellcheck="false">
-      <label style="margin-top:12px">密码</label>
-      <input id="loginPw" type="password" placeholder="请输入密码" maxlength="30">
-      <button class="btn btn-block" style="margin-top:18px" onclick="childLogin()">🔑 登录</button>
+      <div id="loginForm">
+        <label style="margin-top:16px">账号</label>
+        <input id="loginUser" placeholder="如：xiaoming" maxlength="20" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <label style="margin-top:12px">密码</label>
+        <input id="loginPw" type="password" placeholder="请输入密码" maxlength="30" onkeydown="if(event.key==='Enter')childLogin()">
+        <button class="btn btn-block" style="margin-top:18px" onclick="childLogin()">🔑 登录</button>
+      </div>
+      <!-- 记住登录：7 天内一键进入 -->
+      <div id="quickLogin" class="hidden">
+        <div style="text-align:center;padding:6px 0 2px">
+          <div style="font-size:15px;font-weight:700" id="quickHello">欢迎回来</div>
+          <div class="muted" style="font-size:12px;margin-top:4px" id="quickHint">已记住登录，点下面按钮直接进入</div>
+        </div>
+        <button class="btn btn-block" style="margin-top:14px" onclick="quickEnter()">🚀 一键进入我的小金库</button>
+        <p class="muted" style="font-size:12px;text-align:center;margin-top:10px;cursor:pointer;text-decoration:underline" onclick="forgetLogin()">不是我？换个账号登录</p>
+      </div>
       <p class="muted" style="font-size:12px;text-align:center;margin-top:10px">
         💡 账号和密码由管理员设置后告诉你
       </p>
@@ -694,7 +705,7 @@ function openChildDetail(id){
     <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-top:12px;font-size:13px">
       <div style="font-weight:700;margin-bottom:6px">🔐 孩子登录信息</div>
       <div>账号：<b>${c.username||'（未设置）'}</b></div>
-      <div style="margin-top:2px">密码：<b>${c.rawPw||c.pw||'（未设置）'}</b></div>
+      <div style="margin-top:2px">密码：<b>${getChildRawPw(c)||'（已加密保存，点下方按钮可重设）'}</b></div>
       ${c.username? '' : '<div style="color:#b45309;margin-top:6px">⚠️ 尚未设置账号密码，孩子无法登录，请点击下方按钮设置</div>'}
     </div>
     <button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="copyShare(location.origin+location.pathname)">📋 复制统一访问链接</button>
@@ -726,7 +737,7 @@ function openResetCred(id){
   if(!c) return;
   rcId = id;
   document.getElementById('rcUser').value = c.username || '';
-  document.getElementById('rcPw').value = c.rawPw || '';
+  document.getElementById('rcPw').value = getChildRawPw(c);
   document.getElementById('rcResult').style.display = 'none';
   document.getElementById('resetCredModal').classList.remove('hidden');
 }
@@ -997,6 +1008,23 @@ function pwHash(pw){
   for(let i=0;i<s.length;i++){ h = (((h<<5)+h) + s.charCodeAt(i)) >>> 0; }
   return 'h'+h.toString(36);
 }
+// 读取家长端应显示的"当前密码明文"。
+// 说明：云端只存哈希（pw），不存明文；明文仅保存在本机家长库的 rawPw。
+// 为避免云端同步（cloudToChild 返回 rawPw:''）把本地明文覆盖丢失，此处统一兜底：
+// 只要本地 rawPw 与当前哈希对得上就直接用；对不上/为空则不再展示旧明文。
+function getChildRawPw(c){
+  if(!c) return '';
+  const local = c.rawPw || '';
+  const hash = c.pw || '';
+  if(local && (!hash || pwHash(local) === hash)) return local;
+  // 本地无明文（例如换设备/被云端覆盖）：尝试从本机家长库补回
+  try{
+    const db = getDB();
+    const found = (db.children||[]).find(x=>x.id===c.id || (c.username && x.username===c.username));
+    if(found && found.rawPw && (!hash || pwHash(found.rawPw) === hash)) return found.rawPw;
+  }catch(e){}
+  return '';
+}
 
 /* ====================== Supabase 数据访问封装 ====================== */
 async function sbGet(account){
@@ -1071,9 +1099,23 @@ function cloudToChild(data, id){
     lastReqResult: data.rq || null,
     username: data.un || '',
     pw: data.pw || '',
-    rawPw: '',
+    rawPw: '',   // 云端不含明文；合并到本地对象时不要把本地 rawPw 一起覆盖（见 mergeChildFromCloud）
     ts: data.ts || null
   };
+}
+
+// 云端数据合并进本地孩子对象：只覆盖业务字段，保留本地明文密码 rawPw
+// （云端只存哈希 pw，若直接 Object.assign 会把 rawPw 清空，导致家长端密码显示回退成默认值）
+function mergeChildFromCloud(target, fromCloud){
+  if(!target) return fromCloud;
+  const keepRaw = target.rawPw || '';
+  const keepId = target.id;
+  Object.assign(target, fromCloud);
+  target.id = keepId || target.id;
+  // 哈希一致 → 保留本地明文；哈希已变（密码被改）→ 清空，避免显示过期密码
+  if(keepRaw && (!target.pw || pwHash(keepRaw) === target.pw)) target.rawPw = keepRaw;
+  else if(target.pw && keepRaw && pwHash(keepRaw) !== target.pw) target.rawPw = '';
+  return target;
 }
 
 // 本地缓存孩子云端数据：云端取不到（网络不通 / ntfy 缓存过期）时仍可打开页面
@@ -1390,7 +1432,7 @@ function shareChild(id){
   // 统一访问链接：所有孩子共用同一个链接，登录时用各自账号密码进入
   const url = location.origin + location.pathname;
   pushChildCloud(c, db.rates); // 确保云端已有该孩子最新数据
-  const shareText = `🏦 点开下面的链接，用你的账号和密码登录，就能打开你的小金库：\n${url}\n\n👤 账号：${c.username||'（请先在管理端设置）'}\n🔑 密码：${c.rawPw||'（请先在管理端设置）'}\n\n💰 每日利息正在帮你赚钱哦！`;
+  const shareText = `🏦 点开下面的链接，用你的账号和密码登录，就能打开你的小金库：\n${url}\n\n👤 账号：${c.username||'（请先在管理端设置）'}\n🔑 密码：${getChildRawPw(c)||'（请先在管理端设置）'}\n\n💰 每日利息正在帮你赚钱哦！`;
   if(navigator.share){
     navigator.share({title:'我的小金库', text:shareText, url:url}).catch(()=>{ copyShare(shareText); });
   } else {
@@ -1658,8 +1700,8 @@ async function syncChildrenWealthFromCloud(){
       const data = await pullFromCloud(childLoginId(c.username));
       if(data){
         const r = cloudToChild(data, data.id);
-        const ex = db.children.find(x=>x.id===r.id);
-        if(ex){ Object.assign(ex, r); saveDB(db); }
+        const ex = db.children.find(x=>x.id===r.id) || db.children.find(x=>c.username && x.username===c.username);
+        if(ex){ mergeChildFromCloud(ex, r); saveDB(db); }
       }
     }catch(e){}
   }
@@ -1833,6 +1875,7 @@ function loadLoggedInChild(){
 function showLoginPage(){
   document.getElementById('loginPage').classList.remove('hidden');
   document.getElementById('childHome').classList.add('hidden');
+  renderLoginMode();   // 有记住记录 → 一键进入；否则 → 账号密码表单
 }
 function showHome(){
   document.getElementById('loginPage').classList.add('hidden');
@@ -1863,6 +1906,7 @@ function enterHome(c, mode, ts, reason){
   loggedUser.name = c.name || loggedUser.name;
   loggedUser.pwHash = c.pw || loggedUser.pwHash;
   loggedUser.tid = childLoginId(c.username || loggedUser.username);
+  loggedUser.exp = Date.now() + REMEMBER_DAYS*86400000;  // 会话同样 7 天有效
   try{ localStorage.setItem('kb_child_session', JSON.stringify(loggedUser)); }catch(e){}
   sharedChildData = c;
   showHome();
@@ -1889,7 +1933,7 @@ function silentRefreshChild(){
     const db = getDB();
     const recovered = cloudToChild(res.data, res.data.id);
     const ex = db.children.find(x=>x.id===recovered.id);
-    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+    if(ex){ mergeChildFromCloud(ex, recovered); } else { db.children.push(recovered); }
     saveDB(db);
     cacheChild(recovered);
     sharedChildData = recovered;
@@ -1899,34 +1943,114 @@ function silentRefreshChild(){
   }).catch(()=>{});
 }
 
+/* ============ 记住登录（7 天免密一键进入） ============ */
+const REMEMBER_KEY = 'kb_remember_login';
+const REMEMBER_DAYS = 7;
+
+// 读取仍在有效期内的记住记录；过期自动清除
+function getRemembered(){
+  try{
+    const s = localStorage.getItem(REMEMBER_KEY);
+    if(!s) return null;
+    const o = JSON.parse(s);
+    if(!o || !o.u || !o.p || !o.exp) return null;
+    if(Date.now() > o.exp){ localStorage.removeItem(REMEMBER_KEY); return null; }
+    return o;
+  }catch(e){ return null; }
+}
+// 登录成功后写入记住记录（7 天）
+function saveRemembered(username, password){
+  try{
+    localStorage.setItem(REMEMBER_KEY, JSON.stringify({
+      u: username, p: pwHash(password),
+      name: '', exp: Date.now() + REMEMBER_DAYS*86400000, at: Date.now()
+    }));
+  }catch(e){}
+}
+function forgetLogin(){
+  try{ localStorage.removeItem(REMEMBER_KEY); }catch(e){}
+  renderLoginMode();
+  toast('已忘记登录信息，请重新输入账号密码');
+}
+// 切换登录页两种形态：有记住记录 → 一键进入；否则 → 账号密码表单
+function renderLoginMode(){
+  const form = document.getElementById('loginForm');
+  const quick = document.getElementById('quickLogin');
+  if(!form || !quick) return;
+  const r = getRemembered();
+  if(r){
+    form.classList.add('hidden');
+    quick.classList.remove('hidden');
+    const days = Math.max(1, Math.ceil((r.exp - Date.now())/86400000));
+    const nm = r.name || '';
+    const hello = document.getElementById('quickHello');
+    const hint = document.getElementById('quickHint');
+    if(hello) hello.textContent = nm ? ('欢迎回来，'+nm) : '欢迎回来';
+    if(hint) hint.textContent = '已记住登录 · 还有 '+days+' 天免密进入';
+  }else{
+    form.classList.remove('hidden');
+    quick.classList.add('hidden');
+  }
+}
+// 一键进入：用记住的凭据静默登录
+async function quickEnter(){
+  const r = getRemembered();
+  if(!r){ renderLoginMode(); toast('登录信息已过期，请重新输入账号和密码'); return; }
+  await doChildLogin(r.u, null, r.p);   // 传哈希代替明文，跳过明文输入
+}
+
 async function childLogin(){
   const username = document.getElementById('loginUser').value.trim();
   const password = document.getElementById('loginPw').value;
   if(!username){ toast('请输入账号'); return; }
   if(!password){ toast('请输入密码'); return; }
+  await doChildLogin(username, password, null);
+}
+
+// modeHash：一键进入时直接传密码哈希（无需明文）
+async function doChildLogin(username, password, modeHash){
   const tid = childLoginId(username);
-  const hash = pwHash(password);
+  const hash = modeHash || pwHash(password);
   const db = getDB();
   const local = loadCachedChild(tid); // 本地缓存：离线也能登录
   setSyncStatus('syncing','🔄 正在连接云端核对账号...');
   const res = await pullFromCloudResult(tid);
+  // 记住登录：明文输入时写新记录（7天）；一键进入（哈希）时不动原记录，仅续期
+  const remember = (u, pw, nm) => {
+    if(pw) saveRemembered(u, pw);
+    else { // 一键进入：保留原记录，刷新有效期与昵称
+      try{
+        const r = getRemembered() || {};
+        r.u = u; r.p = hash; r.name = nm || r.name || '';
+        r.exp = Date.now() + REMEMBER_DAYS*86400000;
+        localStorage.setItem(REMEMBER_KEY, JSON.stringify(r));
+      }catch(e){}
+    }
+  };
+  // 密码校验失败时的统一处理：清掉已失效的记住记录，退回账号密码表单
+  const failLogin = (msg) => {
+    if(!password){ try{ localStorage.removeItem(REMEMBER_KEY); }catch(e){} } // 一键进入失败：记录已过期，清掉
+    showLoginPage(); toast(msg);
+  };
   if(res.ok && res.data){
     if(res.data.pw && res.data.pw !== hash){
       // 云端密码不匹配：若本地缓存密码一致则退回本地，否则报错
-      if(local && (!local.pw || local.pw===hash)){ enterHome(local, 'local', local.ts); toast('✅ 已登录（使用本地缓存）'); }
-      else { showLoginPage(); toast('❌ 账号或密码错误'); }
+      if(local && (!local.pw || local.pw===hash)){ remember(username, password, local.name); enterHome(local, 'local', local.ts); toast('✅ 已登录（使用本地缓存）'); }
+      else { failLogin('❌ 账号或密码错误，请重新输入'); }
       return;
     }
     const recovered = cloudToChild(res.data, res.data.id);
     const ex = db.children.find(x=>x.id===recovered.id);
-    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+    if(ex){ mergeChildFromCloud(ex, recovered); } else { db.children.push(recovered); }
     saveDB(db); cacheChild(recovered);
+    remember(username, password, recovered.name);
     enterHome(recovered, 'cloud', res.data.ts);
     return;
   }
   // 云端失败 → 退回本地缓存
   if(local){
-    if(local.pw && local.pw !== hash){ showLoginPage(); toast('❌ 账号或密码错误'); return; }
+    if(local.pw && local.pw !== hash){ failLogin('❌ 账号或密码错误，请重新输入'); return; }
+    remember(username, password, local.name);
     enterHome(local, 'local-fail', local.ts, res.reason);
     return;
   }
@@ -1939,6 +2063,7 @@ function childLogout(){
   try{ localStorage.removeItem('kb_child_session'); }catch(e){}
   document.getElementById('loginUser').value='';
   document.getElementById('loginPw').value='';
+  // 退出登录不清除「记住登录」：孩子下次仍可一键进入（7 天内）
   showLoginPage();
 }
 
@@ -1958,7 +2083,7 @@ async function refreshCloudData(){
     }
     const recovered = cloudToChild(res.data, res.data.id);
     const ex = db.children.find(x=>x.id===recovered.id);
-    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+    if(ex){ mergeChildFromCloud(ex, recovered); } else { db.children.push(recovered); }
     saveDB(db); cacheChild(recovered);
     sharedChildData = recovered; loggedChild = recovered;
     renderChildHome();
@@ -2133,10 +2258,18 @@ function migrateAccounts(){
 }
 
 (function init(){
-  // 恢复孩子登录会话（同一浏览器内刷新不丢失）
+  // 恢复孩子登录会话（同一浏览器内刷新不丢失；超过 7 天自动失效，需重新登录）
   try{
     const s = localStorage.getItem('kb_child_session');
-    if(s) loggedUser = JSON.parse(s);
+    if(s){
+      const o = JSON.parse(s);
+      if(o && o.exp && Date.now() > o.exp){
+        localStorage.removeItem('kb_child_session');  // 会话过期
+      } else if(o){
+        loggedUser = o;
+        if(!o.exp){ o.exp = Date.now() + REMEMBER_DAYS*86400000; localStorage.setItem('kb_child_session', JSON.stringify(o)); }
+      }
+    }
   }catch(e){}
   // 迁移：保证每个孩子都有账号密码，统一链接才能登录
   const migrated = migrateAccounts();
