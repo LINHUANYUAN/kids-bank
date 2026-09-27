@@ -95,6 +95,9 @@ select.role-select{padding:11px 14px}
 .progress>div{height:100%;background:linear-gradient(90deg,var(--green),#16a34a);border-radius:4px;transition:.5s}
 .badge{background:var(--orange);color:#fff;padding:3px 8px;border-radius:8px;
   font-size:11px;font-weight:700;margin-left:6px}
+.admin-corner{position:fixed;top:10px;right:10px;z-index:250;width:40px;height:40px;border-radius:50%;
+  background:#fff;box-shadow:0 2px 10px rgba(0,0,0,.18);display:flex;align-items:center;justify-content:center;
+  font-size:18px;cursor:pointer;border:1px solid var(--border)}
 </style>
 </head>
 <body>
@@ -170,6 +173,7 @@ select.role-select{padding:11px 14px}
         <button class="btn btn-ghost btn-sm flex-1" onclick="exportData()">📤 导出备份</button>
         <button class="btn btn-ghost btn-sm flex-1" onclick="importData()">📥 导入恢复</button>
       </div>
+      <button class="btn btn-ghost btn-block" style="margin-top:10px" onclick="openAdminPwModal()">🔑 修改管理员密码</button>
     </div>
 
   </div>
@@ -255,7 +259,7 @@ select.role-select{padding:11px 14px}
 <!-- ============ 孩子端 ============ -->
 <div id="childApp" class="hidden">
   <header>
-    <h1>🐶 小金库</h1>
+    <h1>小金库</h1>
     <div class="sub">看看我的钱袋子！</div>
   </header>
   <div class="wrap">
@@ -273,9 +277,9 @@ select.role-select{padding:11px 14px}
       <input id="loginPw" type="password" placeholder="请输入密码" maxlength="30">
       <button class="btn btn-block" style="margin-top:18px" onclick="childLogin()">🔑 登录</button>
       <p class="muted" style="font-size:12px;text-align:center;margin-top:10px">
-        💡 账号和密码由爸爸妈妈设置后告诉你
+        💡 账号和密码由管理员设置后告诉你
       </p>
-      <p class="muted" style="font-size:12px;text-align:center;margin-top:6px;cursor:pointer;text-decoration:underline" onclick="switchRole('parent')">我是家长？进入管理端</p>
+      <p class="muted" style="font-size:12px;text-align:center;margin-top:6px">家长请点右上角 🔒 图标进入管理端</p>
     </div>
 
     <!-- 孩子主页 -->
@@ -309,7 +313,7 @@ select.role-select{padding:11px 14px}
       <!-- 储蓄目标 -->
       <div class="card" id="goalCard">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <b>🎯 储蓄目标</b>
+          <b>🎯 自己的小目标</b>
           <span class="muted" style="font-size:12px" id="goalText">未设置</span>
         </div>
         <div class="progress"><div id="goalProgress" style="width:0%"></div></div>
@@ -419,12 +423,42 @@ select.role-select{padding:11px 14px}
 </div>
 
 <div class="tabbar" id="tabbar">
-  <a class="active" onclick="switchRole('parent')" id="tabParent">
-    <span class="icon">👨‍👩‍👧</span>家长
+  <a class="active" onclick="switchRole('child')" id="tabChild">
+    <span class="icon">👶</span>我的小金库
   </a>
-  <a onclick="switchRole('child')" id="tabChild">
-    <span class="icon">👶</span>孩子
-  </a>
+</div>
+
+<!-- 家长管理入口：右上角小角标，点击输入管理员密码进入（默认密码不在界面提示） -->
+<div id="adminCorner" class="admin-corner" onclick="onAdminCorner()" title="家长管理（点击输入密码）">🔒</div>
+
+<!-- 管理员密码验证 -->
+<div id="adminModal" class="modal-mask hidden">
+  <div class="modal" style="max-width:340px">
+    <h2>🔐 家长验证</h2>
+    <p class="muted" style="font-size:13px;margin-bottom:12px">请输入管理员密码以进入管理端</p>
+    <input id="adminPw" type="password" placeholder="管理员密码" maxlength="30" onkeydown="if(event.key==='Enter')adminLogin()">
+    <div id="adminErr" style="display:none;color:#dc2626;font-size:12px;margin-top:8px"></div>
+    <div class="flex" style="margin-top:18px">
+      <button class="btn btn-ghost flex-1" onclick="document.getElementById('adminModal').classList.add('hidden')">取消</button>
+      <button class="btn flex-1" onclick="adminLogin()">进入</button>
+    </div>
+  </div>
+</div>
+
+<!-- 修改管理员密码 -->
+<div id="adminPwModal" class="modal-mask hidden">
+  <div class="modal" style="max-width:340px">
+    <h2>🔑 修改管理员密码</h2>
+    <label>原密码</label>
+    <input id="oldAdminPw" type="password" placeholder="原管理员密码" maxlength="30">
+    <label style="margin-top:12px">新密码</label>
+    <input id="newAdminPw" type="password" placeholder="新管理员密码" maxlength="30">
+    <div id="adminPwErr" style="display:none;color:#dc2626;font-size:12px;margin-top:8px"></div>
+    <div class="flex" style="margin-top:18px">
+      <button class="btn btn-ghost flex-1" onclick="document.getElementById('adminPwModal').classList.add('hidden')">取消</button>
+      <button class="btn flex-1" onclick="saveAdminPw()">保存</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -462,19 +496,71 @@ function getDB(){ return loadDB(); }
 // 是否处于分享链接模式（锁定孩子端，隐藏家长入口）
 let isSharedMode = false;
 
-function switchRole(role){
-  // 分享链接模式下，禁止切换到家长端
-  if(isSharedMode && role === 'parent') return;
+function switchRole(role, force){
+  // 家长端只能通过右上角角标 + 管理员密码进入；底部已无家长入口
+  if(role === 'parent' && !adminUnlocked && !force){ onAdminCorner(); return; }
   localStorage.setItem(ROLE_KEY, role);
   document.getElementById('parentApp').classList.toggle('hidden', role!=='parent');
   document.getElementById('childApp').classList.toggle('hidden', role!=='child');
-  document.getElementById('tabParent').classList.toggle('active', role==='parent');
-  document.getElementById('tabChild').classList.toggle('active', role==='child');
-  // 分享链接模式：隐藏底部切换栏
-  document.getElementById('tabbar').style.display = isSharedMode ? 'none' : 'flex';
+  const tb = document.getElementById('tabChild');
+  if(tb) tb.classList.toggle('active', role==='child');
+  // 底部栏只作为孩子端身份条：家长端完全隐藏，避免孩子发现切换入口
+  document.getElementById('tabbar').style.display = role==='parent' ? 'none' : 'flex';
   if(role==='parent') renderParent();
   else renderChild();
   window.scrollTo(0,0);
+}
+
+/* ====================== 管理员密码（家长入口） ====================== */
+let adminUnlocked = false;
+const ADMIN_PW_KEY = 'kidsBankAdminPw';
+function getAdminPw(){ return localStorage.getItem(ADMIN_PW_KEY) || 'admin'; }
+function updateAdminCorner(){
+  const el = document.getElementById('adminCorner');
+  if(!el) return;
+  el.textContent = adminUnlocked ? '⚙️' : '🔒';
+  el.title = adminUnlocked ? '管理端（已解锁）· 点击返回孩子端' : '家长管理（点击输入密码）';
+}
+function onAdminCorner(){
+  if(adminUnlocked){ // 已解锁：在管理端/孩子端之间切换
+    const inParent = !document.getElementById('parentApp').classList.contains('hidden');
+    switchRole(inParent ? 'child' : 'parent');
+    return;
+  }
+  document.getElementById('adminPw').value = '';
+  document.getElementById('adminErr').style.display = 'none';
+  document.getElementById('adminModal').classList.remove('hidden');
+  setTimeout(()=>{ const i=document.getElementById('adminPw'); if(i) i.focus(); }, 50);
+}
+function adminLogin(){
+  const v = document.getElementById('adminPw').value;
+  if(v === getAdminPw()){
+    adminUnlocked = true;
+    document.getElementById('adminModal').classList.add('hidden');
+    updateAdminCorner();
+    switchRole('parent');
+    toast('✅ 已进入管理端');
+  } else {
+    const e = document.getElementById('adminErr');
+    e.textContent = '密码错误，请重试';
+    e.style.display = 'block';
+  }
+}
+function openAdminPwModal(){
+  document.getElementById('oldAdminPw').value = '';
+  document.getElementById('newAdminPw').value = '';
+  document.getElementById('adminPwErr').style.display = 'none';
+  document.getElementById('adminPwModal').classList.remove('hidden');
+}
+function saveAdminPw(){
+  const old = document.getElementById('oldAdminPw').value;
+  const nw = document.getElementById('newAdminPw').value;
+  const e = document.getElementById('adminPwErr');
+  if(old !== getAdminPw()){ e.textContent='原密码不正确'; e.style.display='block'; return; }
+  if(!nw){ e.textContent='请输入新密码'; e.style.display='block'; return; }
+  localStorage.setItem(ADMIN_PW_KEY, nw);
+  document.getElementById('adminPwModal').classList.add('hidden');
+  toast('✅ 管理员密码已修改');
 }
 
 /* ====================== 家长端 ====================== */
@@ -599,7 +685,7 @@ function openChildDetail(id){
       </div>
       <div class="muted" style="font-size:11px;margin-top:6px">年利率 ${db.rates.fixed_1y}%</div>
     </div>
-    <label>🎯 储蓄目标（元）</label>
+    <label>🎯 自己的小目标（元）</label>
     <input type="number" id="goalInput" value="${c.goal||''}" placeholder="如 1000" min="0" step="1">
     <div class="flex" style="margin-top:12px;gap:8px">
       <button class="btn btn-green flex-1" onclick="openTx('${id}','in')">💰 存入</button>
@@ -1934,7 +2020,7 @@ function renderChildHome(){
   } else {
     document.getElementById('goalText').textContent = '未设置';
     document.getElementById('goalProgress').style.width = '0%';
-    document.getElementById('goalHint').textContent = '请爸爸妈妈帮你设置储蓄目标';
+    document.getElementById('goalHint').textContent = '请设置你自己的小目标';
   }
   // 交易明细
   document.getElementById('childTxList').innerHTML = renderTxList(c.transactions);
@@ -2056,7 +2142,10 @@ function migrateAccounts(){
   const migrated = migrateAccounts();
   // 统一链接：新设备默认进入孩子登录页；家长用过的设备沿用上次角色
   const role = localStorage.getItem(ROLE_KEY) || 'child';
+  // 安全：即使本设备上次是家长，也要求重新输管理员密码（避免孩子直接打开就是管理端）
+  if(role === 'parent'){ localStorage.setItem(ROLE_KEY, 'child'); }
   switchRole(role);
+  updateAdminCorner();
   // 家长端启动即把所有孩子数据重新同步到云端，刷新 ntfy 缓存
   resyncAllChildrenToCloud();
   if(migrated){
