@@ -182,7 +182,11 @@ select.role-select{padding:11px 14px}
       <input id="cName" placeholder="如：小明" maxlength="10">
       <label style="margin-top:12px">出生日期（8位数字）</label>
       <input id="cBirth" type="tel" placeholder="如：20010101" pattern="[0-9]{8}" maxlength="8" inputmode="numeric">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">孩子登录时输入这8位数字即可</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">出生日期仅用于展示；登录请使用下面的账号密码</div>
+      <label style="margin-top:12px">登录账号</label>
+      <input id="cUser" placeholder="如：xiaoming（孩子登录用）" maxlength="20" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label style="margin-top:12px">登录密码</label>
+      <input id="cPw" type="text" placeholder="设置登录密码" maxlength="30">
       <label style="margin-top:12px">初始余额（元）</label>
       <input id="cInit" type="number" placeholder="0" min="0" step="0.01">
       <div class="flex" style="margin-top:18px">
@@ -230,19 +234,19 @@ select.role-select{padding:11px 14px}
     </div>
   </div>
 
-  <!-- 重置登录凭证（密码）弹窗 -->
+  <!-- 设置账号密码弹窗 -->
   <div id="resetCredModal" class="modal-mask hidden">
     <div class="modal" style="max-width:420px">
-      <h2>🔑 重置登录凭证</h2>
-      <p class="muted" style="font-size:13px;margin-bottom:12px">孩子的登录方式＝<b>姓名 ＋ 出生日期</b>，出生日期相当于密码。重置后请把新的出生日期告诉孩子。</p>
-      <label>孩子姓名</label>
-      <input id="rcName" maxlength="10">
-      <label style="margin-top:12px">新的出生日期（8位数字，相当于新密码）</label>
-      <input id="rcBirth" type="tel" placeholder="如：20010101" pattern="[0-9]{8}" maxlength="8" inputmode="numeric">
+      <h2>🔑 设置账号密码</h2>
+      <p class="muted" style="font-size:13px;margin-bottom:12px">设置后请把<b>账号</b>和<b>密码</b>告诉孩子，孩子用它们在小金库登录。账号建议使用字母/数字，例如 xiaoming。</p>
+      <label>登录账号</label>
+      <input id="rcUser" placeholder="如：xiaoming" maxlength="20" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label style="margin-top:12px">登录密码</label>
+      <input id="rcPw" type="text" placeholder="设置登录密码" maxlength="30">
       <div id="rcResult" style="display:none;background:#dcfce7;border-radius:10px;padding:12px;margin-top:14px;font-size:13px;color:#15803d"></div>
       <div class="flex" style="margin-top:18px">
         <button class="btn btn-ghost flex-1" onclick="closeModal('resetCredModal')">取消</button>
-        <button class="btn flex-1" onclick="resetCred()">重置并同步</button>
+        <button class="btn flex-1" onclick="resetCred()">保存并同步</button>
       </div>
     </div>
   </div>
@@ -261,16 +265,17 @@ select.role-select{padding:11px 14px}
       <div style="text-align:center;padding:10px 0">
         <div style="font-size:60px">🏦</div>
         <h2 style="margin:8px 0 4px">登录我的小金库</h2>
-        <p class="muted" style="font-size:13px">输入姓名和出生日期即可登录</p>
+        <p class="muted" style="font-size:13px">请输入你的账号和密码</p>
       </div>
-      <label style="margin-top:16px">我的名字</label>
-      <input id="loginName" placeholder="如：小明" maxlength="10">
-      <label style="margin-top:12px">出生日期（8位数字）</label>
-      <input id="loginBirth" type="tel" placeholder="如：20010101" pattern="[0-9]{8}" maxlength="8" inputmode="numeric">
+      <label style="margin-top:16px">账号</label>
+      <input id="loginUser" placeholder="如：xiaoming" maxlength="20" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <label style="margin-top:12px">密码</label>
+      <input id="loginPw" type="password" placeholder="请输入密码" maxlength="30">
       <button class="btn btn-block" style="margin-top:18px" onclick="childLogin()">🔑 登录</button>
       <p class="muted" style="font-size:12px;text-align:center;margin-top:10px">
-        💡 输入你的8位生日数字，如 20010101
+        💡 账号和密码由爸爸妈妈设置后告诉你
       </p>
+      <p class="muted" style="font-size:12px;text-align:center;margin-top:6px;cursor:pointer;text-decoration:underline" onclick="switchRole('parent')">我是家长？进入管理端</p>
     </div>
 
     <!-- 孩子主页 -->
@@ -328,7 +333,8 @@ select.role-select{padding:11px 14px}
         <button class="btn btn-block" style="background:var(--orange)" onclick="openWithdrawReq()" id="withdrawBtn">💸 申请取钱</button>
       </div>
 
-      <button class="btn btn-ghost btn-block" onclick="refreshCloudData()" style="margin-top:8px" id="refreshBtn">🔄 刷新最新数据</button>
+      <div id="syncStatus" style="border-radius:10px;padding:10px;font-size:13px;margin-top:8px;background:#f3f4f6;color:#6b7280">📡 登录后显示同步状态</div>
+      <button class="btn btn-ghost btn-block" onclick="refreshCloudData()" style="margin-top:8px" id="refreshBtn">🔄 刷新云端最新数据</button>
       <button class="btn btn-ghost btn-block" onclick="childLogout()" style="margin-top:8px">退出登录</button>
     </div>
   </div>
@@ -529,6 +535,8 @@ function openAddChild(){
 function saveChild(){
   const name = document.getElementById('cName').value.trim();
   const birth = document.getElementById('cBirth').value.trim();
+  const username = document.getElementById('cUser').value.trim();
+  const password = document.getElementById('cPw').value;
   const init = parseFloat(document.getElementById('cInit').value)||0;
   if(!name){ toast('请输入孩子姓名'); return; }
   if(!/^\d{8}$/.test(birth)){ toast('请输入8位出生日期，如 20010101'); return; }
@@ -539,6 +547,9 @@ function saveChild(){
   const child = {
     id: 'c'+Date.now(),
     name, birth,
+    username: username || ('user'+Date.now().toString().slice(-6)),
+    pw: pwHash(password || '123456'),
+    rawPw: (password || '123456'),
     goal: 0,           // 储蓄目标
     txCat: '',         // 狗狗类型
     transactions: []
@@ -554,10 +565,10 @@ function saveChild(){
   }
   db.children.push(child);
   saveDB(db);
-  // 同步到云端（含登录主题），保证孩子换设备/本地数据丢失后也能用姓名+出生日期登录
+  // 同步到云端（按账号主题），孩子用账号+密码即可登录、云端找回
   pushChildCloud(child, db.rates);
   closeModal('addChildModal');
-  toast('✅ 已添加 '+name);
+  toast('✅ 已添加 '+name+'（账号：'+child.username+' / 密码：'+child.rawPw+'）');
   renderParent();
 }
 
@@ -594,8 +605,14 @@ function openChildDetail(id){
       <button class="btn btn-green flex-1" onclick="openTx('${id}','in')">💰 存入</button>
       <button class="btn btn-red flex-1" onclick="openTx('${id}','out')">💸 取出</button>
     </div>
-    <button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="shareChild('${id}')">📤 分享给孩子</button>
-    <button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="openResetCred('${id}')">🔑 重置登录凭证（密码）</button>
+    <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-top:12px;font-size:13px">
+      <div style="font-weight:700;margin-bottom:6px">🔐 孩子登录信息</div>
+      <div>账号：<b>${c.username||'（未设置）'}</b></div>
+      <div style="margin-top:2px">密码：<b>${c.rawPw||c.pw||'（未设置）'}</b></div>
+      ${c.username? '' : '<div style="color:#b45309;margin-top:6px">⚠️ 尚未设置账号密码，孩子无法登录，请点击下方按钮设置</div>'}
+    </div>
+    <button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="copyShare(location.origin+location.pathname)">📋 复制统一访问链接</button>
+    <button class="btn btn-ghost btn-block" style="margin-top:8px" onclick="openResetCred('${id}')">🔑 设置 / 修改账号密码</button>
     <div style="text-align:right;margin-top:10px">
       <span style="font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline" onclick="deleteChild('${id}')">🗑 删除账户</span>
     </div>
@@ -622,32 +639,30 @@ function openResetCred(id){
   const c = db.children.find(x=>x.id===id);
   if(!c) return;
   rcId = id;
-  document.getElementById('rcName').value = c.name;
-  document.getElementById('rcBirth').value = c.birth;
+  document.getElementById('rcUser').value = c.username || '';
+  document.getElementById('rcPw').value = c.rawPw || '';
   document.getElementById('rcResult').style.display = 'none';
   document.getElementById('resetCredModal').classList.remove('hidden');
 }
 
-// 家长端：确认重置登录凭证（姓名+出生日期，出生日期相当于密码）
+// 家长端：确认设置账号密码
 function resetCred(){
   if(!rcId) return;
-  const name = document.getElementById('rcName').value.trim();
-  const birth = document.getElementById('rcBirth').value.trim();
-  if(!name){ toast('请输入孩子姓名'); return; }
-  if(!/^\d{8}$/.test(birth)){ toast('请输入8位出生日期，如 20010101'); return; }
-  const y=+birth.slice(0,4), m=+birth.slice(4,6), d=+birth.slice(6,8);
-  if(m<1||m>12||d<1||d>31){ toast('出生日期格式不正确'); return; }
+  const username = document.getElementById('rcUser').value.trim();
+  const password = document.getElementById('rcPw').value;
+  if(!username){ toast('请输入账号'); return; }
+  if(!password){ toast('请输入密码'); return; }
   const db = getDB();
   const c = db.children.find(x=>x.id===rcId);
   if(!c){ toast('找不到孩子账户'); return; }
-  c.name = name; c.birth = birth;
+  c.username = username; c.pw = pwHash(password); c.rawPw = password;
   saveDB(db);
-  // 同时写到 id 主题 和 登录主题（新出生日期），确保孩子用新凭证能登录、云端也能找回
+  // 推送到账号主题，孩子即可用新账号密码登录、云端找回
   pushChildCloud(c, db.rates);
   const res = document.getElementById('rcResult');
   res.style.display = 'block';
-  res.innerHTML = '✅ 已重置！新登录凭证：<br>姓名：'+name+'<br>出生日期（密码）：'+birth+'<br><br>请让孩子用「姓名 + 新出生日期」登录。分享链接仍可正常使用。';
-  toast('✅ 已重置登录凭证');
+  res.innerHTML = '✅ 已设置！孩子的登录信息：<br>账号：'+username+'<br>密码：'+password+'<br><br>请把账号和密码告诉孩子，用统一链接登录即可。';
+  toast('✅ 已设置账号密码');
   setTimeout(()=>{ renderParent(); }, 800);
 }
 
@@ -753,6 +768,19 @@ function deleteChild(id){
 // ntfy.sh 是免费公共服务，无需注册，用于家长→孩子的数据同步
 const NTFY_BASE = 'https://ntfy.sh/kidsbank_';
 
+/* ====================== Supabase 云存储（免费档，持久保存，替代 ntfy 的 12h 缓存脆弱性） ======================
+ * 在 https://supabase.com 建一个免费项目，运行下面给出的 SQL 建表后，把 Project URL 与 anon/public key 填到此处。
+ * 留空则自动回退到 ntfy（仍能工作，但受 12h 缓存限制，偶尔连不上）。
+ * anon key 是公开密钥，可安全内嵌前端。
+ */
+const SUPABASE = {
+  url: '',        // 例：https://xxxx.supabase.co
+  anonKey: ''     // 项目 API 密钥（anon / public）
+};
+const SB_ON = !!(SUPABASE.url && SUPABASE.anonKey);
+const SB_TABLE = 'child_data';
+const SB_REQ_TABLE = 'withdraw_requests';
+
 // 云端推送失败重试队列（保证离线/弱网时数据最终也能上传）
 function enqueueCloudPush(childId, data){
   try{
@@ -789,13 +817,25 @@ async function pushToCloud(childId, data){
   return false;
 }
 
-// 从云端拉取孩子最新数据（带重试：弱网/偶发超时自动重试，最大化"任何情况下都能连上云端"）
-async function pullFromCloud(childId){
-  const topic = NTFY_BASE + childId;
-  for(let attempt=1; attempt<=3; attempt++){
-    const ctrl = new AbortController();
-    const timer = setTimeout(()=>ctrl.abort(), 8000);
+// 从云端拉取孩子最新数据：优先 Supabase（持久），失败回退 ntfy（带重试与详细原因，绝不一直"更新中"）
+async function pullFromCloudResult(childId){
+  // ① 优先 Supabase（数据长期保存，不受 ntfy 12h 缓存限制）
+  if(SB_ON){
     try{
+      const data = await sbGet(childId);
+      if(data) return {ok:true, data};
+      return {ok:false, reason:'云端暂无该账号的数据（家长可能还未同步，或账号不正确）'};
+    }catch(e){
+      // Supabase 异常 → 落到 ntfy 兜底
+    }
+  }
+  // ② ntfy 兜底（仅在未配置 Supabase 或 Supabase 异常时生效）
+  const topic = NTFY_BASE + childId;
+  for(let attempt=1; attempt<=2; attempt++){
+    let ctrl, timer;
+    try{
+      ctrl = new AbortController();
+      timer = setTimeout(()=>ctrl.abort(), 8000); // 8 秒硬超时，绝不空转
       // 不使用 poll=1（长轮询会在空主题时挂起数秒），since=all 直接返回已缓存消息
       const resp = await fetch(topic + '/json?since=all', {method:'GET', signal: ctrl.signal});
       clearTimeout(timer);
@@ -807,21 +847,29 @@ async function pullFromCloud(childId){
           try{
             const msg = JSON.parse(line);
             if(msg.event === 'message' && msg.message != null){
-              // 兼容两种推送格式：message 为 JSON 字符串，或本身已是对象
               const d = (typeof msg.message === 'object') ? msg.message : JSON.parse(msg.message);
               lastData = d;
             }
           }catch(e){}
         }
-        return lastData;  // 主题暂无消息则返回 null，交给上层兜底
+        if(lastData) return {ok:true, data:lastData};
+        return {ok:false, reason:'云端暂无该账号的数据（家长可能还未同步，或缓存已过期）'};
       }
-      if(resp.status === 404) return null; // 主题不存在，无需重试
+      if(resp.status === 404) return {ok:false, reason:'云端暂无该账号的数据（家长可能还未同步）'};
+      return {ok:false, reason:'云端返回错误（HTTP '+resp.status+'）'};
     }catch(e){
-      clearTimeout(timer);
+      if(timer) clearTimeout(timer);
+      if(e && e.name === 'AbortError') return {ok:false, reason:'请求超时（8 秒），请检查网络或稍后重试'};
+      return {ok:false, reason:'网络异常：'+(e&&e.message?e.message:'无法连接 ntfy 服务')};
     }
-    if(attempt < 3) await new Promise(r=>setTimeout(r, 500*attempt)); // 退避重试
+    if(attempt < 2) await new Promise(r=>setTimeout(r, 600)); // 退避重试
   }
-  return null;
+  return {ok:false, reason:'多次同步失败，请稍后重试'};
+}
+// 兼容旧调用：仅返回数据对象或 null
+async function pullFromCloud(childId){
+  const r = await pullFromCloudResult(childId);
+  return r.ok ? r.data : null;
 }
 
 // 构建孩子的云端数据包
@@ -835,7 +883,9 @@ function buildCloudData(c, rates){
     w: (c.wealth||[]).map(h=>[h.principal, h.rate, h.termMonths, h.buyTime, h.maturityTime, h.status, h.id, h.redeemedTime||null]),
     wr: rates.wealthRates || {3:3,6:5,12:8},  // 理财收益率（家长设定，孩子购买时按此计算）
     rq: c.lastReqResult || null,  // 最近一次审批结果
-    ts: Date.now()  // 更新时间戳
+    ts: Date.now(),  // 更新时间戳
+    un: c.username || '',  // 登录账号
+    pw: c.pw || ''        // 登录密码哈希（仅哈希，绝不存明文到云端）
   };
 }
 
@@ -847,19 +897,74 @@ function buildShareSnapshot(c, rates){
   return d;
 }
 
-// 由「姓名+出生日期」派生稳定且 URL 安全的云端主题，使孩子换设备/本地数据丢失后仍能用姓名+出生日期登录
-function childLoginTopic(name, birth){
-  const key = (name||'').trim() + '|' + (birth||'');
+// 由账号派生稳定且 URL 安全的云端主题：孩子用账号+密码登录，云端数据按账号定位
+function childLoginId(username){
+  const key = (username||'').trim().toLowerCase();
   let h = 5381;
   for(let i=0;i<key.length;i++){ h = (((h<<5)+h) + key.charCodeAt(i)) >>> 0; }
-  return 'kc_' + h.toString(36);
+  return 'u' + h.toString(36);
+}
+// 密码哈希（仅用于本地比对，避免明文存储）
+function pwHash(pw){
+  const s = String(pw||'');
+  let h = 5381;
+  for(let i=0;i<s.length;i++){ h = (((h<<5)+h) + s.charCodeAt(i)) >>> 0; }
+  return 'h'+h.toString(36);
 }
 
-// 同时推送到「原始 id 主题」和「登录主题」，保证分享链接与姓名+出生日期登录均可恢复
+/* ====================== Supabase 数据访问封装 ====================== */
+async function sbGet(account){
+  const r = await fetch(`${SUPABASE.url}/rest/v1/${SB_TABLE}?account=eq.${encodeURIComponent(account)}&select=account,data,updated_at`, {
+    headers:{ 'apikey':SUPABASE.anonKey, 'Authorization':'Bearer '+SUPABASE.anonKey }
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const arr = await r.json();
+  return arr[0] ? arr[0].data : null;
+}
+async function sbUpsert(account, dataObj){
+  const body = { account: account, data: dataObj, updated_at: new Date().toISOString() };
+  const r = await fetch(`${SUPABASE.url}/rest/v1/${SB_TABLE}`, {
+    method:'POST',
+    headers:{ 'apikey':SUPABASE.anonKey, 'Authorization':'Bearer '+SUPABASE.anonKey, 'Content-Type':'application/json', 'Prefer':'resolution=merge-duplicates' },
+    body: JSON.stringify([body])
+  });
+  if(!r.ok){ const t = await r.text(); throw new Error('HTTP '+r.status+' '+t); }
+}
+async function sbAddRequest(req){
+  const body = { id: req.id, account: req.account, data: req, created_at: new Date().toISOString(), status:'pending' };
+  const r = await fetch(`${SUPABASE.url}/rest/v1/${SB_REQ_TABLE}`, {
+    method:'POST',
+    headers:{ 'apikey':SUPABASE.anonKey, 'Authorization':'Bearer '+SUPABASE.anonKey, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+    body: JSON.stringify([body])
+  });
+  if(!r.ok){ const t = await r.text(); throw new Error('HTTP '+r.status+' '+t); }
+}
+async function sbGetRequests(){
+  const r = await fetch(`${SUPABASE.url}/rest/v1/${SB_REQ_TABLE}?status=eq.pending&select=*&order=created_at.desc`, {
+    headers:{ 'apikey':SUPABASE.anonKey, 'Authorization':'Bearer '+SUPABASE.anonKey }
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const arr = await r.json();
+  return arr.map(x=>x.data);
+}
+async function sbUpdateRequest(id, patch){
+  const r = await fetch(`${SUPABASE.url}/rest/v1/${SB_REQ_TABLE}?id=eq.${encodeURIComponent(id)}`, {
+    method:'PATCH',
+    headers:{ 'apikey':SUPABASE.anonKey, 'Authorization':'Bearer '+SUPABASE.anonKey, 'Content-Type':'application/json', 'Prefer':'return=minimal' },
+    body: JSON.stringify(patch)
+  });
+  if(!r.ok){ const t = await r.text(); throw new Error('HTTP '+r.status+' '+t); }
+}
+
+// 把孩子数据推送到云端：Supabase 为主（持久保存），ntfy 兜底（兼容旧链接）
 function pushChildCloud(c, rates){
+  const account = c.username ? childLoginId(c.username) : c.id;
   const data = buildCloudData(c, rates);
-  pushToCloud(c.id, data);
-  pushToCloud(childLoginTopic(c.name, c.birth), data);
+  if(SB_ON){
+    sbUpsert(account, data).catch(e=>console.warn('[Supabase] push fail:', e));
+  }
+  // ntfy 兜底：已配置 Supabase 仍推送，保证旧分享链接可用
+  pushToCloud(account, data);
 }
 
 // 云端数据包 → 本地孩子对象
@@ -877,13 +982,20 @@ function cloudToChild(data, id){
     })),
     sharedRate: data.r, sharedRateDate: data.rd,
     wealthRates: data.wr || {3:3,6:5,12:8},
-    lastReqResult: data.rq || null
+    lastReqResult: data.rq || null,
+    username: data.un || '',
+    pw: data.pw || '',
+    rawPw: '',
+    ts: data.ts || null
   };
 }
 
 // 本地缓存孩子云端数据：云端取不到（网络不通 / ntfy 缓存过期）时仍可打开页面
 function cacheChild(c){
-  try{ localStorage.setItem('kb_cache_'+c.id, JSON.stringify(buildCloudData(c, getDB().rates))); }catch(e){}
+  try{
+    const key = c.username ? childLoginId(c.username) : c.id;
+    localStorage.setItem('kb_cache_'+key, JSON.stringify(buildCloudData(c, getDB().rates)));
+  }catch(e){}
 }
 function loadCachedChild(id){
   try{
@@ -969,18 +1081,23 @@ async function submitWithdrawReq(){
   const note = document.getElementById('reqNote').value.trim();
   if(!amount || amount<=0){ toast('请输入有效金额'); return; }
   if(!note){ toast('请填写取钱用途'); return; }
-  const childId = getChildId();
+  const childId = loggedChild ? loggedChild.id : null;
   if(!childId){ toast('无法提交申请'); return; }
   const childName = loggedChild ? loggedChild.name : '孩子';
   // 唯一 ID，用于去重与防重复处理（避免同一申请被多次记录）
   const reqId = 'wr_' + childId + '_' + Date.now() + '_' + Math.floor(Math.random()*1e4);
   const req = { id:reqId, type:'withdraw_req', amount:amount, note:note, payMethod:curPayMethod, time:new Date().toISOString(), childId:childId, childName:childName };
+  req.account = childLoginId(loggedChild.username || childId);
   toast('📨 正在发送申请...');
   try{
-    await fetch(NTFY_REQ_BASE + childId, {
-      method:'POST', body:JSON.stringify(req),
-      headers:{'Content-Type':'application/json'}
-    });
+    if(SB_ON){
+      await sbAddRequest(req);
+    } else {
+      await fetch(NTFY_REQ_BASE + childId, {
+        method:'POST', body:JSON.stringify(req),
+        headers:{'Content-Type':'application/json'}
+      });
+    }
     closeModal('withdrawReqModal');
     toast('✅ 申请已发送给管理员');
     document.getElementById('reqStatus').innerHTML = '<div style="background:#fff7ed;border-radius:10px;padding:10px;font-size:13px;color:#92400e;margin-bottom:8px">⏳ 取钱 ¥'+amount.toFixed(2)+'（'+note+' · '+curPayMethod+'）<br>等待管理员审批中...</div>';
@@ -998,28 +1115,34 @@ async function pullRequests(){
   const db = getDB();
   db.processedReqIds = db.processedReqIds || [];
   if(!db.children.length) return;
-  const allRaw = [];
-  for(const c of db.children){
-    try{
-      const ctrl = new AbortController();
-      const t = setTimeout(()=>ctrl.abort(), 6000);
-      const resp = await fetch(NTFY_REQ_BASE + c.id + '/json?since=all', {signal: ctrl.signal});
-      clearTimeout(t);
-      if(!resp.ok) continue;
-      const text = await resp.text();
-      const lines = text.trim().split('\n').filter(l=>l.trim());
-      for(const line of lines){
-        try{
-          const msg = JSON.parse(line);
-          if(msg.event === 'message' && msg.message){
-            const d = (typeof msg.message === 'object') ? msg.message : JSON.parse(msg.message);
-            if(d.type === 'withdraw_req' && d.childId === c.id){
-              allRaw.push(d);
+  let allRaw = [];
+  if(SB_ON){
+    try{ allRaw = await sbGetRequests(); }catch(e){ allRaw = []; }
+    // 仅保留本地已知孩子的申请
+    allRaw = allRaw.filter(r => db.children.some(c=>c.id===r.childId));
+  } else {
+    for(const c of db.children){
+      try{
+        const ctrl = new AbortController();
+        const t = setTimeout(()=>ctrl.abort(), 6000);
+        const resp = await fetch(NTFY_REQ_BASE + c.id + '/json?since=all', {signal: ctrl.signal});
+        clearTimeout(t);
+        if(!resp.ok) continue;
+        const text = await resp.text();
+        const lines = text.trim().split('\n').filter(l=>l.trim());
+        for(const line of lines){
+          try{
+            const msg = JSON.parse(line);
+            if(msg.event === 'message' && msg.message){
+              const d = (typeof msg.message === 'object') ? msg.message : JSON.parse(msg.message);
+              if(d.type === 'withdraw_req' && d.childId === c.id){
+                allRaw.push(d);
+              }
             }
-          }
-        }catch(e){}
-      }
-    }catch(e){}
+          }catch(e){}
+        }
+      }catch(e){}
+    }
   }
   // 去重 + 剔除已处理（已同意/拒绝）的申请，避免反复弹出、反复提醒、重复记录
   const seen = {};
@@ -1138,6 +1261,7 @@ function approveReq(id){
   closeModal('approveModal');
   // 推送到云端（孩子刷新即看到余额变化+审批结果）
   pushChildCloud(c, db.rates);
+  if(SB_ON) sbUpdateRequest(r.id, {status:'approved'}).catch(()=>{});
   toast('✅ 已同意取钱 ¥'+r.amount.toFixed(2)+'（'+payMethod+'）');
   renderParent();
   renderRequests(db.pendingRequests);
@@ -1167,6 +1291,7 @@ function rejectReq(id){
   refreshParentBadge(); // 即时更新桌面图标红点
   closeModal('approveModal');
   pushChildCloud(c, db.rates);
+  if(SB_ON) sbUpdateRequest(r.id, {status:'rejected'}).catch(()=>{});
   toast('已拒绝取钱申请');
   renderParent();
   renderRequests(db.pendingRequests);
@@ -1176,23 +1301,15 @@ function shareChild(id){
   const db = getDB();
   const c = db.children.find(x=>x.id===id);
   if(!c) return;
-  const cloudData = buildCloudData(c, db.rates);
-  // 链接内嵌精简快照（不含姓名，更短且保护隐私）：孩子打开即能看到数据，云端仅作实时刷新增强
-  const snap = btoa(unescape(encodeURIComponent(JSON.stringify(buildShareSnapshot(c, db.rates)))));
-  const url = location.origin + location.pathname + '#k=' + id + '~' + snap;
-  const shareText = `🏦 点开下面的链接，就能打开你的小金库，查看余额和每天的利息：\n${url}\n\n💰 每日利息正在帮你赚钱哦！`;
-
-  // 同步到云端（实时刷新增强）；即使云端失效，链接内嵌快照也能保证孩子打开
-  toast('⏳ 正在同步到云端...');
-  pushChildCloud(c, db.rates);
+  // 统一访问链接：所有孩子共用同一个链接，登录时用各自账号密码进入
+  const url = location.origin + location.pathname;
+  pushChildCloud(c, db.rates); // 确保云端已有该孩子最新数据
+  const shareText = `🏦 点开下面的链接，用你的账号和密码登录，就能打开你的小金库：\n${url}\n\n👤 账号：${c.username||'（请先在管理端设置）'}\n🔑 密码：${c.rawPw||'（请先在管理端设置）'}\n\n💰 每日利息正在帮你赚钱哦！`;
   if(navigator.share){
-    navigator.share({title:'我的小金库', text:shareText, url:url}).catch(()=>{
-      copyShare(shareText);
-    });
+    navigator.share({title:'我的小金库', text:shareText, url:url}).catch(()=>{ copyShare(shareText); });
   } else {
     copyShare(shareText);
   }
-  toast('✅ 分享链接已生成（链接自带数据，离线也能打开）');
 }
 function copyShare(text){
   if(navigator.clipboard){
@@ -1217,7 +1334,7 @@ function getWealthRates(){
 
 // 取得当前正在操作的孩子对象（优先本地库条目，确保改动能持久化）
 function currentChildForEdit(){
-  const id = (loggedChild && loggedChild.id) || getChildId();
+  const id = (loggedChild && loggedChild.id) || null;
   if(id){
     const db = getDB();
     const ex = db.children.find(x=>x.id===id);
@@ -1416,7 +1533,6 @@ function buyWealth(){
   const ex = db.children.find(x=>x.id===c.id);
   if(ex){ Object.assign(ex, c); saveDB(db); }
   pushChildCloud(c, db.rates);
-  refreshLinkSnapshot(getChildId()||c.id, c, db.rates);
   closeModal('wealthBuyModal');
   toast('✅ 已购买理财 ¥'+amt.toFixed(2)+'（'+term+'个月·收益率'+rate+'%）');
   renderChildHome();
@@ -1451,8 +1567,9 @@ async function syncChildrenWealthFromCloud(){
   if(!db.children || !db.children.length) return;
   for(const c of db.children){
     if(!c.id || c.id==='shared') continue;
+    if(!c.username) continue; // 未设置账号无法定位云端主题
     try{
-      const data = await pullFromCloud(c.id);
+      const data = await pullFromCloud(childLoginId(c.username));
       if(data){
         const r = cloudToChild(data, data.id);
         const ex = db.children.find(x=>x.id===r.id);
@@ -1602,216 +1719,171 @@ function calcTotalInterest(child, annualRate){
 
 /* ====================== 孩子端 ====================== */
 let loggedChild = null;
+let loggedUser = null;        // 当前登录的孩子会话 {username, tid, name, pwHash}
 let childAwaiting = false;   // 孩子端是否已有申请在等待审批
-let sharedChildData = null;  // 从分享链接解析的数据
+let sharedChildData = null;  // 兼容旧引用
 
 function renderChild(){
-  const { id, snap } = parseShareHash();
-
-  // 纯快照链接（旧式 #d=）：直接打开，无需云端
-  if(snap && (!id || id === 'shared')){
-    const c = decodeSnapshot(snap);
-    if(c){
-      sharedChildData = c; loggedChild = c;
-      document.getElementById('loginPage').classList.add('hidden');
-      document.getElementById('childHome').classList.remove('hidden');
-      renderChildHome();
-      toast('✅ 已加载最新数据');
-    }else{
-      toast('⚠️ 分享链接已失效，请让管理员重新分享');
-    }
-    return;
-  }
-
-  // 云端同步模式 #k=<childId>：优先云端最新，失败则用链接内嵌快照兜底
-  if(id){
-    loadCloudChild(id, snap);
+  const c = loadLoggedInChild();
+  if(c){
+    loggedChild = c;
+    showHome();
+    renderChildHome();
+    setSyncStatus('', '📡 已显示本地缓存数据 · '+fmtSyncTime(c.ts||Date.now()));
+    silentRefreshChild(); // 打开即后台同步一次，拿到最新
+  }else{
+    showLoginPage();
   }
 }
 
-// 从云端加载孩子数据；云端取不到时依次用「链接内嵌快照」→「本地缓存」兜底，保证任何时间都能打开
-async function loadCloudChild(childId, snap){
-  // 显示加载中
-  const oldL = document.getElementById('cloudLoading'); if(oldL) oldL.remove();
-  document.getElementById('loginPage').classList.add('hidden');
-  document.getElementById('childHome').classList.add('hidden');
-  const loadingDiv = document.createElement('div');
-  loadingDiv.id = 'cloudLoading';
-  loadingDiv.className = 'card';
-  loadingDiv.style.textAlign = 'center';
-  loadingDiv.innerHTML = '<div style="font-size:40px">🏦</div><p style="margin-top:10px;color:#6b7280">正在加载小金库...</p>';
-  document.querySelector('#childApp .wrap').insertBefore(loadingDiv, document.getElementById('loginPage'));
-
-  const data = await pullFromCloud(childId);
-  loadingDiv.remove();
+// 取回当前登录会话对应的孩子对象（优先本地缓存，其次本机家长库）
+function loadLoggedInChild(){
+  if(!loggedUser) return null;
+  let c = loadCachedChild(loggedUser.tid);
+  if(c) return c;
   const db = getDB();
-
-  // ① 云端有数据：用最新数据
-  if(data){
-    const recovered = cloudToChild(data, data.id);
-    const ex = db.children.find(x=>x.id===recovered.id);
-    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
-    saveDB(db);
-    cacheChild(recovered);
-    // 回写云端 + 刷新链接内嵌快照，保证链接永不过期、下次打开必定能开
-    pushToCloud(childId, buildCloudData(recovered, db.rates));
-    if(recovered.name && recovered.birth) pushToCloud(childLoginTopic(recovered.name, recovered.birth), buildCloudData(recovered, db.rates));
-    refreshLinkSnapshot(childId, recovered, db.rates);
-    sharedChildData = recovered;
-    loggedChild = recovered;
-    document.getElementById('loginPage').classList.add('hidden');
-    document.getElementById('childHome').classList.remove('hidden');
-    renderChildHome();
-    toast('✅ 已加载最新数据');
-    return;
-  }
-
-  // ② 云端取不到（空主题/过期/网络不通）：用链接内嵌快照 —— 链接自带数据，永不过期，且一定是本孩子的数据
-  if(snap){
-    const c = decodeSnapshot(snap);
-    if(c){
-      sharedChildData = c;
-      loggedChild = c;
-      document.getElementById('loginPage').classList.add('hidden');
-      document.getElementById('childHome').classList.remove('hidden');
-      renderChildHome();
-      // 自愈：用快照把云端数据补回来，避免下次仍取不到
-      pushToCloud(childId, buildCloudData(c, db.rates));
-      if(c.name && c.birth) pushToCloud(childLoginTopic(c.name, c.birth), buildCloudData(c, db.rates));
-      cacheChild(c);
-      // 链接自带数据兜底，静默打开，不弹干扰提示
-      return;
-    }
-  }
-
-  // ③ 再用本地缓存兜底
-  const cached = loadCachedChild(childId) || db.children.find(x=>x.id===childId) || null;
-  if(cached){
-    sharedChildData = cached;
-    loggedChild = cached;
-    document.getElementById('loginPage').classList.add('hidden');
-    document.getElementById('childHome').classList.remove('hidden');
-    renderChildHome();
-    pushToCloud(childId, buildCloudData(cached, db.rates));
-    if(cached.name && cached.birth) pushToCloud(childLoginTopic(cached.name, cached.birth), buildCloudData(cached, db.rates));
-    // 本地缓存兜底，静默打开，不弹干扰提示
-    return;
-  }
-
+  return db.children.find(x=> childLoginId(x.username||'')===loggedUser.tid) || null;
+}
+function showLoginPage(){
   document.getElementById('loginPage').classList.remove('hidden');
-  toast('⚠️ 暂时无法连接，请检查网络后刷新重试');
+  document.getElementById('childHome').classList.add('hidden');
+}
+function showHome(){
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('childHome').classList.remove('hidden');
+}
+function fmtSyncTime(ts){
+  if(!ts) ts = Date.now();
+  const d = new Date(ts);
+  const p = n => (n<10?'0'+n:n);
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());
+}
+// 同步状态条：成功显示更新时间；失败显示原因（绝不卡在"更新中"）
+function setSyncStatus(state, text){
+  const el = document.getElementById('syncStatus');
+  if(!el) return;
+  let color='#6b7280', bg='#f3f4f6';
+  if(state==='syncing'){ color='#1d4ed8'; bg='#eff6ff'; }
+  else if(state==='success'){ color='#15803d'; bg='#dcfce7'; }
+  else if(state==='fail'){ color='#b45309'; bg='#fef3c7'; }
+  else if(state==='error'){ color='#b91c1c'; bg='#fee2e2'; }
+  el.style.cssText = 'border-radius:10px;padding:10px;font-size:13px;margin-top:8px;background:'+bg+';color:'+color;
+  el.innerHTML = text;
+}
+// 进入主页：写入会话、渲染、更新同步状态
+function enterHome(c, mode, ts, reason){
+  loggedChild = c;
+  if(!loggedUser) loggedUser = {username:c.username, tid:childLoginId(c.username), name:c.name, pwHash:c.pw};
+  loggedUser.name = c.name || loggedUser.name;
+  loggedUser.pwHash = c.pw || loggedUser.pwHash;
+  loggedUser.tid = childLoginId(c.username || loggedUser.username);
+  try{ localStorage.setItem('kb_child_session', JSON.stringify(loggedUser)); }catch(e){}
+  sharedChildData = c;
+  showHome();
+  renderChildHome();
+  if(mode==='cloud' || mode==='refresh'){
+    setSyncStatus('success','✅ 云端同步成功 · 更新于 '+fmtSyncTime(ts||Date.now()));
+  }else if(mode==='local'){
+    setSyncStatus('', '📡 已显示本地缓存数据 · '+fmtSyncTime(ts||c.ts||Date.now()));
+  }else if(mode==='local-fail'){
+    setSyncStatus('fail','⚠️ 云端同步失败：'+(reason||'未知原因')+' · 已显示本地缓存（'+fmtSyncTime(c.ts||Date.now())+'）');
+  }
+  // 孩子每打开一次就把自己最新数据回写云端，刷新 ntfy 缓存（12h），提升下次可连性
+  pushChildCloud(c, getDB().rates);
 }
 
-// 孩子端静默刷新：打开期间定时拉取最新数据（家长存/取后孩子无需手动刷新即可看到）
+// 孩子端静默刷新：打开期间定时拉取最新数据
 function silentRefreshChild(){
-  const shareId = parseShareHash().id;
-  let id = shareId;
-  if(!id || id === 'shared'){ id = (loggedChild && loggedChild.id) || null; }
-  if(!id) return;
+  if(!loggedUser) return;
   if(!navigator.onLine) return;
   if(document.querySelector('.modal-mask:not(.hidden)')) return; // 弹窗打开时不打断
-  pullFromCloud(id).then(data=>{
-    if(!data) return;
+  pullFromCloudResult(loggedUser.tid).then(res=>{
+    if(!res.ok || !res.data) return;
+    if(res.data.pw && res.data.pw !== loggedUser.pwHash) return;
     const db = getDB();
-    const recovered = cloudToChild(data, data.id || id);
+    const recovered = cloudToChild(res.data, res.data.id);
     const ex = db.children.find(x=>x.id===recovered.id);
     if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
     saveDB(db);
     cacheChild(recovered);
-    if(shareId) refreshLinkSnapshot(shareId, recovered, db.rates); // 仅分享模式才重写链接快照
     sharedChildData = recovered;
     loggedChild = recovered;
     renderChildHome();
+    setSyncStatus('success','✅ 云端同步成功 · 更新于 '+fmtSyncTime(Date.now()));
   }).catch(()=>{});
 }
 
 async function childLogin(){
-  const name = document.getElementById('loginName').value.trim();
-  const rawBirth = document.getElementById('loginBirth').value.trim();
-  if(!name){ toast('请输入姓名'); return; }
-  if(!rawBirth){ toast('请输入出生日期'); return; }
-  // 容错：去除非数字字符，补全
-  const birth = rawBirth.replace(/\D/g,'');
-  if(birth.length !== 8){ toast('请输入8位出生日期，如 20010101'); return; }
+  const username = document.getElementById('loginUser').value.trim();
+  const password = document.getElementById('loginPw').value;
+  if(!username){ toast('请输入账号'); return; }
+  if(!password){ toast('请输入密码'); return; }
+  const tid = childLoginId(username);
+  const hash = pwHash(password);
   const db = getDB();
-  // 1) 本地优先匹配
-  let c = db.children.find(x=>x.name===name && x.birth===birth);
-  if(c){
-    loggedChild = c;
-    document.getElementById('loginPage').classList.add('hidden');
-    document.getElementById('childHome').classList.remove('hidden');
-    renderChildHome();
-    return;
-  }
-  // 2) 本地没有：尝试从云端按「姓名+出生日期」找回（解决换设备/本地数据丢失后仍可登录）
-  toast('🔄 正在云端核对账户...');
-  try{
-    const data = await pullFromCloud(childLoginTopic(name, birth));
-    if(data && (data.n||'').trim()===name && (data.b||'')===birth){
-      const recovered = cloudToChild(data, data.id);
-      db.children.push(recovered);
-      saveDB(db);
-      loggedChild = recovered;
-      document.getElementById('loginPage').classList.add('hidden');
-      document.getElementById('childHome').classList.remove('hidden');
-      renderChildHome();
-      toast('✅ 已从云端恢复账户');
+  const local = loadCachedChild(tid); // 本地缓存：离线也能登录
+  setSyncStatus('syncing','🔄 正在连接云端核对账号...');
+  const res = await pullFromCloudResult(tid);
+  if(res.ok && res.data){
+    if(res.data.pw && res.data.pw !== hash){
+      // 云端密码不匹配：若本地缓存密码一致则退回本地，否则报错
+      if(local && (!local.pw || local.pw===hash)){ enterHome(local, 'local', local.ts); toast('✅ 已登录（使用本地缓存）'); }
+      else { showLoginPage(); toast('❌ 账号或密码错误'); }
       return;
     }
-  }catch(e){}
-  toast('❌ 姓名或出生日期不正确');
+    const recovered = cloudToChild(res.data, res.data.id);
+    const ex = db.children.find(x=>x.id===recovered.id);
+    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+    saveDB(db); cacheChild(recovered);
+    enterHome(recovered, 'cloud', res.data.ts);
+    return;
+  }
+  // 云端失败 → 退回本地缓存
+  if(local){
+    if(local.pw && local.pw !== hash){ showLoginPage(); toast('❌ 账号或密码错误'); return; }
+    enterHome(local, 'local-fail', local.ts, res.reason);
+    return;
+  }
+  setSyncStatus('error','❌ 无法连接云端且无本地缓存：'+(res.reason||'未知原因'));
+  toast('❌ '+(res.reason||'无法连接云端'));
 }
 
 function childLogout(){
-  loggedChild = null;
-  sharedChildData = null;
-  document.getElementById('childHome').classList.add('hidden');
-  document.getElementById('loginPage').classList.remove('hidden');
-  document.getElementById('loginName').value='';
-  document.getElementById('loginBirth').value='';
-  if(location.hash.startsWith('#d=') || location.hash.startsWith('#k=')){
-    history.replaceState(null,'',location.pathname);
-  }
+  loggedChild = null; loggedUser = null; sharedChildData = null;
+  try{ localStorage.removeItem('kb_child_session'); }catch(e){}
+  document.getElementById('loginUser').value='';
+  document.getElementById('loginPw').value='';
+  showLoginPage();
 }
 
-// 刷新云端数据（支持分享链接模式与本地登录模式；云端取不到时回退到链接自带快照）
+// 手动刷新云端最新数据；成功显示更新时间，失败明确原因，绝不卡住
 async function refreshCloudData(){
-  const shareId = parseShareHash().id;
-  let id = shareId;
-  if(!id || id === 'shared'){ id = (loggedChild && loggedChild.id) || null; }
-  if(!id){
-    toast('当前是本地模式，刷新页面即可');
-    return;
-  }
+  if(!loggedUser){ toast('请先登录'); return; }
   const btn = document.getElementById('refreshBtn');
-  btn.textContent = '⏳ 刷新中...';
-  btn.disabled = true;
-  let data = await pullFromCloud(id);
-  let fromCloud = !!data;
-  // 云端取不到：尝试用链接自带快照兜底，保证刷新总能显示数据
-  if(!data){
-    const { snap } = parseShareHash();
-    if(snap){ data = decodeSnapshot(snap); }
-  }
-  btn.textContent = '🔄 刷新最新数据';
-  btn.disabled = false;
-  if(!data){
-    // 仍取不到（无云端、也无快照）：保留当前本地数据，友好提示，不报错
-    if(loggedChild){ renderChildHome(); toast('📡 当前为离线数据，联网后会自动更新'); }
-    else toast('⚠️ 暂时无法刷新，请稍后重试');
+  btn.textContent = '⏳ 同步中...'; btn.disabled = true;
+  setSyncStatus('syncing','🔄 正在同步云端...');
+  const res = await pullFromCloudResult(loggedUser.tid);
+  btn.textContent = '🔄 刷新云端最新数据'; btn.disabled = false;
+  const db = getDB();
+  if(res.ok && res.data){
+    if(res.data.pw && res.data.pw !== loggedUser.pwHash){
+      setSyncStatus('fail','⚠️ 账号或密码不匹配，无法刷新（请重新登录）');
+      toast('⚠️ 账号或密码不匹配，请重新登录'); return;
+    }
+    const recovered = cloudToChild(res.data, res.data.id);
+    const ex = db.children.find(x=>x.id===recovered.id);
+    if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
+    saveDB(db); cacheChild(recovered);
+    sharedChildData = recovered; loggedChild = recovered;
+    renderChildHome();
+    setSyncStatus('success','✅ 云端同步成功 · 更新于 '+fmtSyncTime(res.data.ts||Date.now()));
+    toast('✅ 已更新到最新数据');
     return;
   }
-  const db = getDB();
-  const recovered = cloudToChild(data, data.id || id);
-  const ex = db.children.find(x=>x.id===recovered.id);
-  if(ex){ Object.assign(ex, recovered); } else { db.children.push(recovered); }
-  saveDB(db);
-  cacheChild(recovered);
-  if(shareId) refreshLinkSnapshot(shareId, recovered, db.rates);
-  sharedChildData = recovered;
-  loggedChild = recovered;
-  renderChildHome();
-  toast(fromCloud ? '✅ 已更新到最新数据' : '✅ 已用分享链接数据刷新');
+  // 失败：保留当前页面，提示原因（不卡住）
+  const cur = loadLoggedInChild() || loggedChild;
+  setSyncStatus('fail','⚠️ 云端同步失败：'+(res.reason||'未知原因')+(cur?(' · 已显示本地缓存（'+fmtSyncTime(cur.ts||Date.now())+'）'):''));
+  toast('⚠️ 同步失败：'+(res.reason||'请检查网络'));
 }
 
 function renderChildHome(){
@@ -1824,9 +1896,7 @@ function renderChildHome(){
   if(checkWealthRedeem(c)){
     const ex = db.children.find(x=>x.id===c.id);
     if(ex){ Object.assign(ex, c); saveDB(db); }
-    const cid = getChildId();
     pushChildCloud(c, db.rates);
-    if(cid) refreshLinkSnapshot(cid, c, db.rates);
     toast('🎉 有理财已到期，本金＋利息已自动回到余额！');
   }
   loggedChild = c;
@@ -1960,21 +2030,41 @@ function refreshBadge(c){
 }
 
 /* ====================== 启动 ====================== */
+// 为尚未设置账号的孩子生成默认账号密码，确保统一链接下每个孩子都能登录
+function migrateAccounts(){
+  const db = getDB();
+  let changed = false;
+  db.children.forEach(c=>{
+    if(!c.username){
+      c.username = 'user' + (c.id.replace(/\D/g,'').slice(-6) || Math.floor(Math.random()*1e6));
+      c.pw = pwHash('123456');
+      c.rawPw = '123456';
+      changed = true;
+    }
+  });
+  if(changed) saveDB(db);
+  return changed;
+}
+
 (function init(){
-  // 处理分享链接：云端同步模式 #k= 或快照模式 #d=
-  if(location.hash.startsWith('#k=') || location.hash.startsWith('#d=')){
-    isSharedMode = true;  // 锁定孩子端，隐藏家长入口
-    switchRole('child');
-  } else {
-    const role = localStorage.getItem(ROLE_KEY) || 'parent';
-    switchRole(role);
-  }
-  // 家长端启动即把所有孩子数据重新同步到云端（刷新 30 天保留），
-  // 防止 ntfy 缓存过期导致孩子打不开；也避免弱网下数据没真正上云
+  // 恢复孩子登录会话（同一浏览器内刷新不丢失）
+  try{
+    const s = localStorage.getItem('kb_child_session');
+    if(s) loggedUser = JSON.parse(s);
+  }catch(e){}
+  // 迁移：保证每个孩子都有账号密码，统一链接才能登录
+  const migrated = migrateAccounts();
+  // 统一链接：新设备默认进入孩子登录页；家长用过的设备沿用上次角色
+  const role = localStorage.getItem(ROLE_KEY) || 'child';
+  switchRole(role);
+  // 家长端启动即把所有孩子数据重新同步到云端，刷新 ntfy 缓存
   resyncAllChildrenToCloud();
+  if(migrated){
+    setTimeout(()=>toast('已为未设置账号的孩子生成默认账号密码（密码 123456），可在详情中修改'), 900);
+  }
 })();
 
-// 家长端应用启动时，把所有孩子数据重新同步到云端（刷新 30 天保留，避免缓存过期后孩子打不开）
+// 家长端应用启动时，把所有孩子数据重新同步到云端（刷新 ntfy 缓存，避免过期后孩子打不开）
 function resyncAllChildrenToCloud(){
   const db = getDB();
   (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates); });
@@ -1990,13 +2080,8 @@ window.addEventListener('online', flushCloudPushQueue);
 flushCloudPushQueue();
 // 孩子端打开期间每 25 秒静默刷新一次，自动获取家长最新数据
 setInterval(silentRefreshChild, 25000);
-// 在同一浏览器标签内粘贴不同的分享链接时，重新加载对应孩子（避免停留在上一个孩子的数据）
-window.addEventListener('hashchange', ()=>{
-  if(location.hash.startsWith('#k=') || location.hash.startsWith('#d=')){
-    isSharedMode = true;
-    switchRole('child');
-  }
-});
+// 链接不再依赖 hash；会话存在时 hash 变化重新渲染当前孩子
+window.addEventListener('hashchange', ()=>{ if(loggedUser) renderChild(); });
 </script>
 </body>
 </html>
