@@ -214,7 +214,8 @@ select.role-select{padding:11px 14px}
     <!-- 数据管理 -->
     <div class="card">
       <b style="font-size:16px">💾 数据管理</b>
-      <p class="muted" style="font-size:12px;margin:4px 0 12px">数据保存在本设备。建议定期导出备份，换手机时可导入恢复。</p>
+      <p class="muted" style="font-size:12px;margin:4px 0 12px">数据保存在本设备并同步到云端。建议定期导出备份，换手机时可导入恢复。</p>
+      <button class="btn btn-block" style="margin-bottom:8px" onclick="manualCloudSync(this)">🔄 同步云端（拉取孩子端最新交易）</button>
       <div class="flex">
         <button class="btn btn-ghost btn-sm flex-1" onclick="exportData()">📤 导出备份</button>
         <button class="btn btn-ghost btn-sm flex-1" onclick="importData()">📥 导入恢复</button>
@@ -440,56 +441,55 @@ select.role-select{padding:11px 14px}
   </div>
 </div>
 
-<!-- ============ 购买理财弹窗 ============ -->
+<!-- ============ 购买理财弹窗（两步：填写 → 不可赎回风险确认 → 成交） ============ -->
 <div id="wealthBuyModal" class="modal-mask hidden">
   <div class="modal">
-    <h2>🛒 购买理财</h2>
-    <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px">
-      <div style="display:flex;justify-content:space-between"><span class="muted">可用余额</span><b id="wbAvailable" style="color:#4f3df0">¥0.00</b></div>
+    <!-- 第 1 步：填写金额与期限 -->
+    <div id="wbStep1">
+      <h2>🛒 购买理财</h2>
+      <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px">
+        <div style="display:flex;justify-content:space-between"><span class="muted">可用余额</span><b id="wbAvailable" style="color:#4f3df0">¥0.00</b></div>
+      </div>
+      <label>购买金额（元）</label>
+      <input id="wbAmount" type="number" placeholder="如：1000" min="0.01" step="0.01" oninput="updateWealthPreview()">
+      <label style="margin-top:12px">理财期限</label>
+      <div class="flex" style="margin-bottom:4px">
+        <button class="btn flex-1" id="wbTerm3" onclick="setWealthTerm(3)">3个月</button>
+        <button class="btn flex-1" id="wbTerm6" onclick="setWealthTerm(6)">6个月</button>
+        <button class="btn flex-1" id="wbTerm12" onclick="setWealthTerm(12)">12个月</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted)" id="wbRateInfo"></div>
+      <div style="background:#f0fdf4;border-radius:10px;padding:12px;margin-top:12px;font-size:13px" id="wbPreview"></div>
+      <div class="flex" style="margin-top:16px">
+        <button class="btn btn-ghost flex-1" onclick="closeModal('wealthBuyModal')">取消</button>
+        <button class="btn flex-1" style="background:var(--purple)" onclick="gotoWealthConfirm()">下一步</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">
+        💡 收益按管理员设定的收益率计算，到期本金＋利息自动回到余额
+      </div>
     </div>
-    <label>购买金额（元）</label>
-    <input id="wbAmount" type="number" placeholder="如：1000" min="0.01" step="0.01" oninput="updateWealthPreview()">
-    <label style="margin-top:12px">理财期限</label>
-    <div class="flex" style="margin-bottom:4px">
-      <button class="btn flex-1" id="wbTerm3" onclick="setWealthTerm(3)">3个月</button>
-      <button class="btn flex-1" id="wbTerm6" onclick="setWealthTerm(6)">6个月</button>
-      <button class="btn flex-1" id="wbTerm12" onclick="setWealthTerm(12)">12个月</button>
-    </div>
-    <div style="font-size:12px;color:var(--muted)" id="wbRateInfo"></div>
-    <div style="background:#f0fdf4;border-radius:10px;padding:12px;margin-top:12px;font-size:13px" id="wbPreview"></div>
-    <div class="flex" style="margin-top:16px">
-      <button class="btn btn-ghost flex-1" onclick="closeModal('wealthBuyModal')">取消</button>
-      <button class="btn flex-1" style="background:var(--purple)" onclick="buyWealth()">确认购买</button>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">
-      💡 收益按管理员设定的收益率计算，到期本金＋利息自动回到余额
-    </div>
-  </div>
-</div>
 
-<!-- ============ 购买理财弹窗 ============ -->
-<div id="wealthBuyModal" class="modal-mask hidden">
-  <div class="modal">
-    <h2>🛒 购买理财</h2>
-    <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-bottom:12px;font-size:13px">
-      <div style="display:flex;justify-content:space-between"><span class="muted">可用余额</span><b id="wbAvailable" style="color:#4f3df0">¥0.00</b></div>
-    </div>
-    <label>购买金额（元）</label>
-    <input id="wbAmount" type="number" placeholder="如：1000" min="0.01" step="0.01" oninput="updateWealthPreview()">
-    <label style="margin-top:12px">理财期限</label>
-    <div class="flex" style="margin-bottom:4px">
-      <button class="btn flex-1" id="wbTerm3" onclick="setWealthTerm(3)">3个月</button>
-      <button class="btn flex-1" id="wbTerm6" onclick="setWealthTerm(6)">6个月</button>
-      <button class="btn flex-1" id="wbTerm12" onclick="setWealthTerm(12)">12个月</button>
-    </div>
-    <div style="font-size:12px;color:var(--muted)" id="wbRateInfo"></div>
-    <div style="background:#f0fdf4;border-radius:10px;padding:12px;margin-top:12px;font-size:13px" id="wbPreview"></div>
-    <div class="flex" style="margin-top:16px">
-      <button class="btn btn-ghost flex-1" onclick="closeModal('wealthBuyModal')">取消</button>
-      <button class="btn flex-1" style="background:var(--purple)" onclick="buyWealth()">确认购买</button>
-    </div>
-    <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">
-      💡 收益按管理员设定的收益率计算，到期本金＋利息自动回到余额
+    <!-- 第 2 步：锁定期内不可赎回，孩子再点一次确认才成交 -->
+    <div id="wbStep2" class="hidden">
+      <h2>⚠️ 最后确认</h2>
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px;font-size:13px;color:#991b1b;line-height:1.8">
+        <div style="font-weight:700;margin-bottom:6px">这笔钱会被锁住，期限内不能取出</div>
+        你选的是 <b id="wb2Term">3 个月</b> 期理财。购买成功后，这 <b id="wb2Term2">3 个月</b> 内
+        <b>不能赎回、也不能提前取出</b>，要到 <b id="wb2Date">—</b> 到期后，
+        本金＋利息才会自动返回到你的余额。
+      </div>
+      <div style="background:#eef2ff;border-radius:10px;padding:12px;margin-top:12px;font-size:13px" id="wb2Summary"></div>
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;font-size:13px;line-height:1.6;cursor:pointer">
+        <input type="checkbox" id="wb2Agree" onchange="updateWb2Btn()" style="width:auto;margin-top:3px;flex:0 0 auto">
+        <span>我已知道：<b>期限内不能赎回</b>，到期后本金和利息才会自动回到余额</span>
+      </label>
+      <div class="flex" style="margin-top:16px">
+        <button class="btn btn-ghost flex-1" onclick="backToWealthStep1()">← 返回修改</button>
+        <button class="btn flex-1" id="wb2ConfirmBtn" style="background:var(--purple);opacity:.45" onclick="buyWealth()">✅ 确认购买</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:10px;text-align:center">
+        点击「确认购买」即成交，资金立即锁定
+      </div>
     </div>
   </div>
 </div>
@@ -855,8 +855,13 @@ function openChildDetail(id){
         <div id="detailWealthList" style="margin-top:6px">${renderWealthDetail(c)}</div>
       </div>`;
   document.getElementById('childDetailModal').classList.remove('hidden');
-  // 关键修复：打开详情即把该孩子同步到「id 主题 + 登录主题」，确保孩子用姓名+出生日期默认登录可云端找回
-  pushChildCloud(c, db.rates);
+  // ★ 打开详情：先拉云端并集合并（拿到孩子端刚产生的交易/持仓），有新增就重绘一次；
+  //   没有新增才把本地最新推回云端。若直接推送，会用较旧的本地数据覆盖孩子端的购买记录。
+  mergeChildFromCloudById(c).then(changed=>{
+    saveDB(db);
+    if(changed){ openChildDetail(id); return; }   // 第二次进来时云端已无新数据 → 只推送
+    pushChildCloud(c, db.rates);
+  }).catch(()=>{ try{ pushChildCloud(c, db.rates); }catch(e){} });
 }
 
 // 家长端：打开「重置登录凭证（密码）」弹窗
@@ -904,15 +909,17 @@ function renderTxList(txs){
   if(!txs.length) return '<div class="muted" style="font-size:13px;padding:10px 0">暂无交易记录</div>';
   return txs.slice().reverse().map(t=>{
     const isIn = t.type==='in';
+    const amt = Number(t.amount) || 0;
     const d = new Date(t.time);
-    const timeStr = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const timeStr = isNaN(d.getTime()) ? '—'
+      : `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
     return `<div class="list-item">
       <div class="li-icon" style="background:${isIn?'#dcfce7':'#fee2e2'}">${isIn?'💰':'💸'}</div>
       <div class="li-info">
         <div class="t">${t.note||'未填写'}</div>
         <div class="d">${timeStr}</div>
       </div>
-      <div class="li-amt ${isIn?'text-green':'text-red'}">${isIn?'+':'-'}¥${t.amount.toFixed(2)}</div>
+      <div class="li-amt ${isIn?'text-green':'text-red'}">${isIn?'+':'-'}¥${amt.toFixed(2)}</div>
     </div>`;
   }).join('');
 }
@@ -1232,6 +1239,16 @@ async function sbGetRequests(){
   const arr = await r.json();
   return arr.map(x=>x.data);
 }
+// 取回全部申请（含 pending / approved / rejected）。
+// 用于审批弹窗的「兜底找回」：即使待审批列表被后台刷新清空，也能凭 id 精确取回该申请。
+async function sbGetRequestsAll(){
+  const r = await fetch(`${SUPABASE.url}/rest/v1/${SB_REQ_TABLE}?select=*&order=created_at.desc`, {
+    headers:{ 'apikey':SUPABASE.anonKey, 'Authorization':'Bearer '+SUPABASE.anonKey }
+  });
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  const arr = await r.json();
+  return arr.filter(x=>x.status==='pending' || !x.status).map(x=>x.data);
+}
 async function sbUpdateRequest(id, patch){
   const r = await fetch(`${SUPABASE.url}/rest/v1/${SB_REQ_TABLE}?id=eq.${encodeURIComponent(id)}`, {
     method:'PATCH',
@@ -1277,18 +1294,112 @@ function cloudToChild(data, id){
   };
 }
 
-// 云端数据合并进本地孩子对象：只覆盖业务字段，保留本地明文密码 rawPw
-// （云端只存哈希 pw，若直接 Object.assign 会把 rawPw 清空，导致家长端密码显示回退成默认值）
+// 【已弃用，保留仅为兼容】旧版「覆盖式」合并：会把本地独有的交易/持仓整体替换掉。
+// 现在所有同步路径统一走 mergeChildUnion（并集合并），此函数仅作兜底别名。
 function mergeChildFromCloud(target, fromCloud){
-  if(!target) return fromCloud;
-  const keepRaw = target.rawPw || '';
-  const keepId = target.id;
-  Object.assign(target, fromCloud);
-  target.id = keepId || target.id;
-  // 哈希一致 → 保留本地明文；哈希已变（密码被改）→ 清空，避免显示过期密码
-  if(keepRaw && (!target.pw || pwHash(keepRaw) === target.pw)) target.rawPw = keepRaw;
-  else if(target.pw && keepRaw && pwHash(keepRaw) !== target.pw) target.rawPw = '';
-  return target;
+  return mergeChildUnion(target, fromCloud);
+}
+
+/* ============ 并集合并：解决「孩子端买了理财，家长端看不到交易记录」 ============
+   原实现用 Object.assign 直接把云端数据整体覆盖本地：
+   只要家长端本地或云端任一侧「更新」，另一侧独有的交易/持仓就会被整体替换掉。
+   家长端启动时还会把自己那份「较旧」的数据推上云端，把孩子刚买的理财覆盖没了。
+   改为并集合并后：两端记录相乘相加、按唯一键去重，怎么同步都不会丢数据、也不会重复。 */
+// 交易唯一键：类型|金额|备注|时间（时间由产生方写入，跨设备一致，可安全去重）
+function txnKeyOf(t){
+  return (t.type||'')+'|'+(Number(t.amount)||0).toFixed(2)+'|'+(t.note||'')+'|'+(t.time||'');
+}
+// 把云端孩子数据「并集合并」进本地孩子对象（幂等，可反复执行）
+// 返回值：是否「新增了需要重绘界面的内容」（交易/持仓/目标/姓名/头像/密码有变化）
+function mergeChildUnion(target, cloudChild){
+  if(!target || !cloudChild) return false;
+  let changed = false;
+  // ① 交易记录：并集 + 去重（理财购买/赎回记录即由此进入家长端）+ 按时间排序
+  const seen = new Set();
+  const merged = [];
+  (target.transactions||[]).concat(cloudChild.transactions||[]).forEach(t=>{
+    if(!t) return;                 // 只丢弃空元素；异常数据也保留，绝不静默删除本地记录
+    const k = txnKeyOf(t);
+    if(seen.has(k)) return;
+    seen.add(k); merged.push(t);
+  });
+  merged.sort((a,b)=>(Date.parse(a.time)||0)-(Date.parse(b.time)||0));
+  if(merged.length !== (target.transactions||[]).length) changed = true;
+  target.transactions = merged.map((t,i)=> t.id ? t : Object.assign({}, t, {id:'mt'+i}));
+  // ② 理财持仓：并集 + 按持仓 id 去重；同 id 时「已赎回」为终态，优先保留
+  const wmap = new Map();
+  (target.wealth||[]).forEach(h=>{ if(h && h.id) wmap.set(h.id, h); });
+  const wealthBefore = wmap.size;
+  (cloudChild.wealth||[]).forEach(h=>{
+    if(!h || !h.id) return;
+    const prev = wmap.get(h.id);
+    if(!prev){ wmap.set(h.id, h); return; }
+    if(prev.status!=='redeemed' && h.status==='redeemed') wmap.set(h.id, h);
+  });
+  target.wealth = Array.from(wmap.values());
+  if(target.wealth.length !== wealthBefore) changed = true;
+  // ③ 标量字段：本地缺失时用云端补齐（孩子自设的小目标不会被家长端抹掉）
+  if((!target.goal || target.goal<=0) && cloudChild.goal>0){ target.goal = cloudChild.goal; changed = true; }
+  if(!target.name && cloudChild.name){ target.name = cloudChild.name; changed = true; }
+  if(!target.birth && cloudChild.birth){ target.birth = cloudChild.birth; changed = true; }
+  if(!target.photo && cloudChild.photo){ target.photo = cloudChild.photo; changed = true; }
+  // ④ 密码哈希以云端为准（家长改密后孩子端/其他设备保持一致）；明文仍由本机 rawPw 保管
+  if(cloudChild.pw && cloudChild.pw !== target.pw){ target.pw = cloudChild.pw; changed = true; }
+  if(cloudChild.lastReqResult) target.lastReqResult = cloudChild.lastReqResult;
+  // ⑤ 计息利率 / 理财收益率配置：两项均由家长端设定，以云端下发值为准
+  if(cloudChild.sharedRate != null){ target.sharedRate = cloudChild.sharedRate; target.sharedRateDate = cloudChild.sharedRateDate; }
+  if(cloudChild.rateKey) target.rateKey = cloudChild.rateKey;
+  if(cloudChild.rateLabel) target.rateLabel = cloudChild.rateLabel;
+  if(cloudChild.wealthRates) target.wealthRates = cloudChild.wealthRates;
+  if(cloudChild.username) target.username = cloudChild.username;
+  if(cloudChild.ts) target.ts = cloudChild.ts;
+  return changed;   // 仅「界面需要重绘」时才算变化，避免调用方无限重绘
+}
+// 孩子端：把云端下发的「计息利率 / 理财收益率」落到本地 db。
+// 不落库的话孩子端本地一直是默认值，孩子下次（比如购买理财时）回推云端
+// 会把家长设置好的利率/收益率覆盖回默认值。
+function adoptCloudRates(data){
+  if(!data) return;
+  const db = getDB();
+  let changed = false;
+  if(data.wr && JSON.stringify(db.wealthRates || {}) !== JSON.stringify(data.wr)){
+    db.wealthRates = {3:data.wr[3], 6:data.wr[6], 12:data.wr[12]};
+    changed = true;
+  }
+  if(data.r != null && data.rk && RATE_LABELS[data.rk]){
+    const next = normalizeRates(Object.assign({}, db.rates, { activeKey: data.rk }));
+    next[data.rk] = Number(data.r);
+    if(data.rd) next.date = data.rd;
+    if(next.activeKey !== db.rates.activeKey || next[data.rk] !== db.rates[data.rk] || next.date !== db.rates.date){
+      db.rates = next; changed = true;
+    }
+  }
+  if(changed) saveDB(db);
+}
+// 云端数据 → 本地孩子对象 → 并集合并进本地库
+// 返回：云端是否带来了「需要重绘界面」的新内容（交易/持仓等）
+async function mergeChildFromCloudById(c){
+  const account = c.username ? childLoginId(c.username) : c.id;
+  try{
+    const r = await pullFromCloudResult(account);
+    if(r.ok && r.data) return !!mergeChildUnion(c, cloudToChild(r.data, c.id));
+  }catch(e){}
+  return false;
+}
+// 家长端「双向对齐」：先拉云端 → 并集合并进本地 → 再把合并结果推回云端（保证两端收敛）
+// ★ 替代原来「无条件把本地推上云端」的写法——那会把孩子端刚买的理财直接覆盖掉
+async function syncAllChildrenWithCloud(){
+  const db = getDB();
+  const list = (db.children||[]).filter(c=>c.id && c.id!=='shared');
+  if(!list.length) return {ok:0, total:0};
+  let ok = 0;
+  for(const c of list){
+    const hit = await mergeChildFromCloudById(c);   // ① 先取云端最新（避免覆盖）
+    if(hit) ok++;
+    try{ pushChildCloud(c, db.rates, false); }catch(e){}  // ② 再把合并后的最新推回
+  }
+  saveDB(db);
+  return {ok, total: list.length};
 }
 
 // 本地缓存孩子云端数据：云端取不到（网络不通 / ntfy 缓存过期）时仍可打开页面
@@ -1417,8 +1528,9 @@ async function pullRequests(){
   db.processedReqIds = db.processedReqIds || [];
   if(!db.children.length) return;
   let allRaw = [];
+  let fetchOk = false;   // ★ 拉取是否成功。失败时【保留】现有列表，避免误清空导致「申请不存在」
   if(SB_ON){
-    try{ allRaw = await sbGetRequests(); }catch(e){ allRaw = []; }
+    try{ allRaw = await sbGetRequests(); fetchOk = true; }catch(e){ fetchOk = false; }
     // 仅保留本地已知孩子的申请
     allRaw = allRaw.filter(r => db.children.some(c=>c.id===r.childId));
   } else {
@@ -1456,17 +1568,25 @@ async function pullRequests(){
     d.id = id;
     pending.push(d);
   }
-  db.pendingRequests = pending;
-  saveDB(db);
-  renderRequests(pending);
-  // 仅在有「新」申请时提醒，已见过的不重复提醒
-  const prevSeen = db.lastPullReqIds || [];
-  const newOnes = pending.filter(p => prevSeen.indexOf(p.id) === -1);
-  if(newOnes.length){
-    toast('📬 收到 ' + newOnes.length + ' 条新取钱申请');
+  // ★ 云端拉取失败时不清空现有待审批列表：宁可显示旧列表让家长能继续点，
+  //   也不能因为一次网络抖动就把列表抹掉（那会让随后的审批报「申请不存在」）。
+  if(!fetchOk && !SB_ON) fetchOk = true;   // ntfy 分支：未取到即视为空结果，按原逻辑处理
+  if(fetchOk){
+    db.pendingRequests = pending;
+    saveDB(db);
+    renderRequests(pending);
+    // 仅在有「新」申请时提醒，已见过的不重复提醒
+    const prevSeen = db.lastPullReqIds || [];
+    const newOnes = pending.filter(p => prevSeen.indexOf(p.id) === -1);
+    if(newOnes.length){
+      toast('📬 收到 ' + newOnes.length + ' 条新取钱申请');
+    }
+    db.lastPullReqIds = pending.map(p=>p.id);
+    saveDB(db);
+  } else {
+    // 拉取失败：保留既有列表，仅重绘
+    renderRequests(db.pendingRequests || []);
   }
-  db.lastPullReqIds = pending.map(p=>p.id);
-  saveDB(db);
   // 刷新家长端桌面图标红点（待审批申请数）
   refreshParentBadge();
 }
@@ -1499,13 +1619,35 @@ function renderRequests(reqs){
 
 // 家长端：打开审批弹窗
 function openApprove(id){
-  const db = getDB();
+  let db = getDB();
   db.processedReqIds = db.processedReqIds || [];
-  const r = db.pendingRequests.find(x=>x.id===id);
+  let r = (db.pendingRequests || []).find(x=>x.id===id);
   if(!r){
-    if(db.processedReqIds.indexOf(id) !== -1){ toast('该申请已处理'); }
-    else { toast('申请不存在或已处理'); }
-    renderRequests(db.pendingRequests || []);
+    // 兜底：先看看本地缓存里是否还有；再尝试从云端按 id 取回
+    if(db.processedReqIds.indexOf(id) !== -1){
+      toast('该申请已处理过了');
+      renderRequestsSafe();
+      return;
+    }
+    // 尝试云端精确找回（异步，不阻塞弹窗关闭）
+    if(SB_ON){
+      sbGetRequestsAll().then(all=>{
+        const hit = all.find(x=>x.id===id);
+        if(hit){
+          const d2 = getDB();
+          d2.pendingRequests = d2.pendingRequests || [];
+          if(!d2.pendingRequests.some(x=>x.id===id)) d2.pendingRequests.push(hit);
+          saveDB(d2);
+          openApprove(id);
+        } else {
+          toast('该申请已被处理');
+          renderRequestsSafe();
+        }
+      }).catch(()=>{ toast('该申请已被处理'); renderRequestsSafe(); });
+      return;
+    }
+    toast('该申请已被处理');
+    renderRequestsSafe();
     return;
   }
   const d = new Date(r.time);
@@ -1530,22 +1672,53 @@ function openApprove(id){
   document.getElementById('approveModal').classList.remove('hidden');
 }
 
-// 家长端：同意取钱
-function approveReq(id){
-  const db = getDB();
+// 家长端：定位待处理申请。
+// ★ 保险机制：若弹窗里的申请已不在内存列表中（例如被后台拉取刷新过），
+//   则从本地缓存 / 云端临时取回该申请，保证「点了就一定能处理」，不再误报「申请不存在」。
+async function locateRequest(id){
+  let db = getDB();
   db.processedReqIds = db.processedReqIds || [];
-  // 防重复处理：已处理过的申请直接返回，避免同一申请被多次记录
-  if(db.processedReqIds.indexOf(id) !== -1){
-    toast('该申请已处理');
-    renderRequests(db.pendingRequests || []);
+  if(db.processedReqIds.indexOf(id) !== -1) return {db, req:null, done:true};
+  // ① 先在待审批列表里找
+  let r = (db.pendingRequests || []).find(x=>x.id===id);
+  if(r) return {db, req:r};
+  // ② 再重读一次 localStorage（避免内存对象与存储不一致）
+  r = (getDB().pendingRequests || []).find(x=>x.id===id);
+  if(r) return {db: getDB(), req:r};
+  // ③ 最后回云端按 id 精确取回
+  if(SB_ON){
+    try{
+      const all = await sbGetRequestsAll();
+      const hit = all.find(x=>x.id===id);
+      if(hit){
+        const db3 = getDB();
+        db3.pendingRequests = db3.pendingRequests || [];
+        if(!db3.pendingRequests.some(x=>x.id===id)) db3.pendingRequests.push(hit);
+        db3.processedReqIds = db3.processedReqIds || [];
+        saveDB(db3);
+        return {db: db3, req: hit};
+      }
+    }catch(e){}
+  }
+  return {db: getDB(), req:null};
+}
+
+// 家长端：同意取钱
+async function approveReq(id){
+  const found = await locateRequest(id);
+  if(found.done){ toast('该申请已处理过了'); closeModal('approveModal'); renderRequests(getDB().pendingRequests||[]); return; }
+  const r = found.req;
+  if(!r){
+    closeModal('approveModal');
+    toast('该申请已被处理（可能在其他设备上已审批）');
+    renderRequests(getDB().pendingRequests||[]);
     return;
   }
-  const idx = db.pendingRequests.findIndex(x=>x.id===id);
-  if(idx === -1){ toast('申请不存在或已处理'); return; }
-  const r = db.pendingRequests[idx];
+  const db = getDB();
+  db.processedReqIds = db.processedReqIds || [];
   const c = db.children.find(x=>x.id===r.childId);
   if(!c){ toast('❌ 找不到孩子账户'); return; }
-  if(r.amount > calcBalance(c)){ toast('❌ 余额不足'); return; }
+  if(r.amount > calcBalance(c)){ toast('❌ 余额不足，无法支取'); return; }
   const payMethod = r.payMethod || '现金';
   // 写取出记录（摘要自动包含用途+支取方式）
   c.transactions.push({
@@ -1555,47 +1728,64 @@ function approveReq(id){
   // 记录审批结果（让孩子端看到）
   c.lastReqResult = { status:'approved', amount:r.amount, reason:'', time:new Date().toISOString(), note:r.note, payMethod:payMethod };
   // 从待审批列表移除，并标记为已处理（防止被再次拉取后重复记录）
-  db.pendingRequests.splice(idx, 1);
+  db.pendingRequests = (db.pendingRequests||[]).filter(x=>x.id!==id);
   db.processedReqIds.push(id);
   saveDB(db);
   refreshParentBadge(); // 即时更新桌面图标红点
   closeModal('approveModal');
-  // 推送到云端（孩子刷新即看到余额变化+审批结果）
-  pushChildCloud(c, db.rates);
+  // 推送到云端（孩子刷新即看到余额变化+审批结果）。★ force：审批是关键变更，必须立刻下发
+  pushChildCloud(c, db.rates, true);
   if(SB_ON) sbUpdateRequest(r.id, {status:'approved'}).catch(()=>{});
   toast('✅ 已同意取钱 ¥'+r.amount.toFixed(2)+'（'+payMethod+'）');
-  renderParent();
-  renderRequests(db.pendingRequests);
+  // ★ 关键修复：先更新列表，最后才拉取云端。
+  //   原来在 closeModal 之后立刻 renderParent()（内含 pullRequests），
+  //   拉取过程会把申请从列表里挤掉，导致紧接着的查找失败并误报「申请不存在或已处理」。
+  renderRequestsSafe();
+  refreshParentNoPull();
+  pullRequests();   // 放最后：服务端状态已更新，重拉不会丢失
 }
 
 // 家长端：拒绝取钱
-function rejectReq(id){
-  const db = getDB();
-  db.processedReqIds = db.processedReqIds || [];
-  // 防重复处理：已处理过的申请直接返回
-  if(db.processedReqIds.indexOf(id) !== -1){
-    toast('该申请已处理');
-    renderRequests(db.pendingRequests || []);
+async function rejectReq(id){
+  const found = await locateRequest(id);
+  if(found.done){ toast('该申请已处理过了'); closeModal('approveModal'); renderRequests(getDB().pendingRequests||[]); return; }
+  const r = found.req;
+  if(!r){
+    closeModal('approveModal');
+    toast('该申请已被处理（可能在其他设备上已审批）');
+    renderRequests(getDB().pendingRequests||[]);
     return;
   }
-  const idx = db.pendingRequests.findIndex(x=>x.id===id);
-  if(idx === -1){ toast('申请不存在或已处理'); return; }
-  const r = db.pendingRequests[idx];
   const reason = prompt('请输入拒绝理由（会显示给孩子）：');
   if(reason === null) return;
+  const db = getDB();
+  db.processedReqIds = db.processedReqIds || [];
   const c = db.children.find(x=>x.id===r.childId);
   if(!c){ toast('❌ 找不到孩子账户'); return; }
   c.lastReqResult = { status:'rejected', amount:r.amount, reason:reason||'家长未填写理由', time:new Date().toISOString(), note:r.note };
-  db.pendingRequests.splice(idx, 1);
+  db.pendingRequests = (db.pendingRequests||[]).filter(x=>x.id!==id);
   db.processedReqIds.push(id);
   saveDB(db);
   refreshParentBadge(); // 即时更新桌面图标红点
   closeModal('approveModal');
-  pushChildCloud(c, db.rates);
+  pushChildCloud(c, db.rates, true);
   if(SB_ON) sbUpdateRequest(r.id, {status:'rejected'}).catch(()=>{});
   toast('已拒绝取钱申请');
-  renderParent();
-  renderRequests(db.pendingRequests);
+  renderRequestsSafe();
+  refreshParentNoPull();
+  pullRequests();
+}
+
+// 渲染待审批列表（永远从 storage 读最新，避免内存对象过期）
+function renderRequestsSafe(){
+  renderRequests(getDB().pendingRequests || []);
+}
+// 刷新家长端，但【不】触发云端拉取（避免拉取过程中打断正在进行的审批操作）
+function refreshParentNoPull(){
+  const db = getDB();
+  renderChildList(db);
+  renderRequestsSafe();
+  refreshParentBadge();
 }
 
 function shareChild(id){
@@ -1759,8 +1949,9 @@ function renderWealthDetail(c){
   }).join('');
 }
 
-// 打开购买理财弹窗
+// 打开购买理财弹窗（两阶段：1=填写，2=不可赎回确认）
 let curWealthTerm = 3;
+let wbStage = 1;
 function openWealthBuy(){
   const c = currentChildForEdit();
   const bal = calcBalance(c);
@@ -1769,7 +1960,51 @@ function openWealthBuy(){
   curWealthTerm = 3;
   setWealthTerm(3);
   updateWealthPreview();
+  setWealthStage(1);
   document.getElementById('wealthBuyModal').classList.remove('hidden');
+}
+function setWealthStage(n){
+  wbStage = n;
+  const s1 = document.getElementById('wbStep1'), s2 = document.getElementById('wbStep2');
+  if(s1) s1.classList.toggle('hidden', n!==1);
+  if(s2) s2.classList.toggle('hidden', n!==2);
+}
+function backToWealthStep1(){ setWealthStage(1); }
+// 勾选框联动「确认购买」按钮可用状态，避免误点
+function updateWb2Btn(){
+  const ck = document.getElementById('wb2Agree');
+  const btn = document.getElementById('wb2ConfirmBtn');
+  if(!ck || !btn) return;
+  const on = !!ck.checked;
+  btn.disabled = !on;
+  btn.style.opacity = on ? '1' : '.45';
+}
+// 第 1 步 → 第 2 步：校验金额/余额，并展示「锁定期内不可赎回」的风险摘要
+function gotoWealthConfirm(){
+  const amt = parseFloat(document.getElementById('wbAmount').value);
+  const term = curWealthTerm;
+  if(!amt || amt<=0){ toast('请输入购买金额'); return; }
+  const c = currentChildForEdit();
+  if(!c){ toast('操作失败'); return; }
+  const bal = calcBalance(c);
+  if(amt > bal){ toast('❌ 可用余额不足，当前可用 ¥'+bal.toFixed(2)); return; }
+  const rate = getWealthRates()[term];
+  const interest = amt * (rate/100) * (term/12);
+  const maturity = new Date(Date.now() + term*MONTH_DAYS*86400000);
+  const mStr = maturity.getFullYear()+'-'+pad(maturity.getMonth()+1)+'-'+pad(maturity.getDate());
+  document.getElementById('wb2Term').textContent = term+' 个月';
+  document.getElementById('wb2Term2').textContent = term+' 个月';
+  document.getElementById('wb2Date').textContent = mStr;
+  document.getElementById('wb2Summary').innerHTML =
+      '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>购买金额</span><b>¥'+amt.toFixed(2)+'</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>锁定期限</span><b>'+term+' 个月（不可赎回）</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>年化收益率</span><b>'+rate+'%</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>到期日</span><b>'+mStr+'</b></div>'
+    + '<div style="display:flex;justify-content:space-between;margin-top:6px;padding-top:6px;border-top:1px dashed #c7d2fe"><span>到期可得</span><b style="color:#15803d;font-size:16px">¥'+(amt+interest).toFixed(2)+'</b></div>';
+  const ck = document.getElementById('wb2Agree');
+  if(ck) ck.checked = false;
+  updateWb2Btn();
+  setWealthStage(2);
 }
 function setWealthTerm(t){
   curWealthTerm = t;
@@ -1798,7 +2033,11 @@ function updateWealthPreview(){
 }
 
 // 确认购买理财：本金锁定扣除，生成持仓；到期由 checkWealthRedeem 自动赎回
+// ★ 只有在第 2 步（已确认「期限内不可赎回」）才允许成交
 function buyWealth(){
+  if(wbStage !== 2){ gotoWealthConfirm(); return; }
+  const ck = document.getElementById('wb2Agree');
+  if(!ck || !ck.checked){ toast('请先勾选「我已知道期限内不能赎回」'); return; }
   const amt = parseFloat(document.getElementById('wbAmount').value);
   const term = curWealthTerm;
   const rates = getWealthRates();
@@ -1829,13 +2068,15 @@ function buyWealth(){
     note:'理财购买·'+term+'个月期（锁定本金¥'+amt.toFixed(2)+'·收益率'+rate+'%）',
     time: buyTime.toISOString(), cat:'wealth_buy'
   });
-  // 持久化 + 同步云端
+  // 持久化 + 同步云端。★ 理财购买是关键变更：force 推送，家长端才能立即同步到这笔交易
   const db = getDB();
-  const ex = db.children.find(x=>x.id===c.id);
-  if(ex){ Object.assign(ex, c); saveDB(db); }
-  pushChildCloud(c, db.rates);
+  let ex = db.children.find(x=>x.id===c.id);
+  if(!ex){ db.children.push(c); ex = c; }
+  else if(ex !== c){ Object.assign(ex, c); }
+  saveDB(db);
+  pushChildCloud(ex, db.rates, true);
   closeModal('wealthBuyModal');
-  toast('✅ 已购买理财 ¥'+amt.toFixed(2)+'（'+term+'个月·收益率'+rate+'%）');
+  toast('✅ 购买成功！¥'+amt.toFixed(2)+' 已锁定 '+term+' 个月，到期自动回到余额');
   renderChildHome();
 }
 
@@ -1884,30 +2125,50 @@ function renderParentWealthRates(db){
     <div class="r"><span>12个月期</span><b>${wr[12]}%</b></div>`;
 }
 
-// 家长端：从云端同步孩子的理财持仓/余额变动（孩子端购买理财后，家长也能看到）
+// 家长端：从云端同步孩子的交易记录 / 理财持仓 / 余额变动
+// ★ 改用并集合并：孩子端购买理财产生的交易与持仓会「合并」进来，而不是被云端整体覆盖
 async function syncChildrenWealthFromCloud(){
   const db = getDB();
-  if(!db.children || !db.children.length) return;
+  if(!db.children || !db.children.length) return {ok:0, total:0};
+  let ok = 0, total = 0;
   for(const c of db.children){
     if(!c.id || c.id==='shared') continue;
-    if(!c.username) continue; // 未设置账号无法定位云端主题
+    total++;
     try{
-      const data = await pullFromCloud(childLoginId(c.username));
-      if(data){
-        const r = cloudToChild(data, data.id);
-        const ex = db.children.find(x=>x.id===r.id) || db.children.find(x=>c.username && x.username===c.username);
-        if(ex){ mergeChildFromCloud(ex, r); saveDB(db); }
-      }
+      // 未设账号的孩子也能用 id 主题定位（与 pushChildCloud 的定位规则保持一致）
+      if(await mergeChildFromCloudById(c)) ok++;
     }catch(e){}
   }
+  saveDB(db);
+  renderParentAfterCloudSync();
+  return {ok, total};
+}
+// 家长端手动同步按钮：拉取云端最新 → 并集合并 → 刷新界面
+async function manualCloudSync(btn){
+  const old = btn ? btn.textContent : '';
+  if(btn){ btn.disabled = true; btn.textContent = '🔄 同步中…'; }
+  try{
+    const r = await syncAllChildrenWithCloud();
+    renderParentAfterCloudSync();
+    toast(r.ok ? '✅ 同步完成：'+r.ok+'/'+r.total+' 个账户已更新' : '⚠️ 云端暂无新数据，已显示本地记录');
+  }catch(e){
+    toast('⚠️ 同步失败：'+(e&&e.message?e.message:'网络异常'));
+  }finally{
+    if(btn){ btn.disabled = false; btn.textContent = old || '🔄 同步云端'; }
+  }
+}
+// 同步后刷新家长端：孩子列表 + 打开中的详情弹窗（交易明细 / 理财持仓）
+function renderParentAfterCloudSync(){
+  const db = getDB();
   renderChildList(db);
-  // 若孩子详情弹窗正打开，刷新其中的理财摘要
-  const dwl = document.getElementById('detailWealthList');
-  if(dwl){
-    const openId = document.querySelector('#childDetailModal:not(.hidden)');
-    if(openId){
-      const c = db.children.find(x=>x.id===curWealthDetailId);
-      if(c) dwl.innerHTML = renderWealthDetail(c);
+  const modal = document.getElementById('childDetailModal');
+  if(modal && !modal.classList.contains('hidden') && curWealthDetailId){
+    const c = db.children.find(x=>x.id===curWealthDetailId);
+    if(c){
+      const dwl = document.getElementById('detailWealthList');
+      const dtl = document.getElementById('detailTxList');
+      if(dwl) dwl.innerHTML = renderWealthDetail(c);
+      if(dtl) dtl.innerHTML = renderTxList(c.transactions);
     }
   }
 }
@@ -2123,13 +2384,14 @@ function silentRefreshChild(){
     if(!res.ok || !res.data) return;
     if(res.data.pw && res.data.pw !== loggedUser.pwHash) return;
     const db = getDB();
+    adoptCloudRates(res.data);          // 先把家长设的利率/收益率落到本地，避免回推时覆盖
     const recovered = cloudToChild(res.data, res.data.id);
-    const ex = db.children.find(x=>x.id===recovered.id);
-    if(ex){ mergeChildFromCloud(ex, recovered); } else { db.children.push(recovered); }
+    let ex = db.children.find(x=>x.id===recovered.id);
+    if(ex){ mergeChildUnion(ex, recovered); } else { db.children.push(recovered); ex = recovered; }
     saveDB(db);
-    cacheChild(recovered);
-    sharedChildData = recovered;
-    loggedChild = recovered;
+    cacheChild(ex);
+    sharedChildData = ex;
+    loggedChild = ex;
     renderChildHome();
     setSyncStatus('success','✅ 云端同步成功 · 更新于 '+fmtSyncTime(Date.now()));
   }).catch(()=>{});
@@ -2231,12 +2493,13 @@ async function doChildLogin(username, password, modeHash){
       else { failLogin('❌ 账号或密码错误，请重新输入'); }
       return;
     }
+    adoptCloudRates(res.data);   // 家长设的利率/收益率落到本地，避免孩子端回推时覆盖
     const recovered = cloudToChild(res.data, res.data.id);
-    const ex = db.children.find(x=>x.id===recovered.id);
-    if(ex){ mergeChildFromCloud(ex, recovered); } else { db.children.push(recovered); }
-    saveDB(db); cacheChild(recovered);
-    remember(username, password, recovered.name);
-    enterHome(recovered, 'cloud', res.data.ts);
+    let ex = db.children.find(x=>x.id===recovered.id);
+    if(ex){ mergeChildUnion(ex, recovered); } else { db.children.push(recovered); ex = recovered; }
+    saveDB(db); cacheChild(ex);
+    remember(username, password, ex.name);
+    enterHome(ex, 'cloud', res.data.ts);
     return;
   }
   // 云端失败 → 退回本地缓存
@@ -2273,11 +2536,12 @@ async function refreshCloudData(){
       setSyncStatus('fail','⚠️ 账号或密码不匹配，无法刷新（请重新登录）');
       toast('⚠️ 账号或密码不匹配，请重新登录'); return;
     }
+    adoptCloudRates(res.data);   // 家长设的利率/收益率落到本地，避免孩子端回推时覆盖
     const recovered = cloudToChild(res.data, res.data.id);
-    const ex = db.children.find(x=>x.id===recovered.id);
-    if(ex){ mergeChildFromCloud(ex, recovered); } else { db.children.push(recovered); }
-    saveDB(db); cacheChild(recovered);
-    sharedChildData = recovered; loggedChild = recovered;
+    let ex = db.children.find(x=>x.id===recovered.id);
+    if(ex){ mergeChildUnion(ex, recovered); } else { db.children.push(recovered); ex = recovered; }
+    saveDB(db); cacheChild(ex);
+    sharedChildData = ex; loggedChild = ex;
     renderChildHome();
     setSyncStatus('success','✅ 云端同步成功 · 更新于 '+fmtSyncTime(res.data.ts||Date.now()));
     toast('✅ 已更新到最新数据');
@@ -2531,11 +2795,23 @@ function migrateAccounts(){
   }
 })();
 
-// 家长端应用启动时，把所有孩子数据重新同步到云端（刷新 ntfy 缓存，避免过期后孩子打不开）
+// 家长端启动时与云端「双向对齐」：先拉云端并集合并（保留孩子端刚买的理财），再把合并结果推回云端。
+// ★ 旧实现是无条件把本地数据推上云端，会把孩子端新产生的交易记录覆盖掉，导致家长端看不到。
 function resyncAllChildrenToCloud(){
-  const db = getDB();
-  (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates); });
+  return syncAllChildrenWithCloud();
 }
+// 家长端打开期间每 90 秒自动同步一次：孩子端刚买的理财会自动出现在家长端
+setInterval(()=>{
+  if(document.hidden) return;
+  const pa = document.getElementById('parentApp');
+  if(pa && !pa.classList.contains('hidden')) syncChildrenWealthFromCloud();
+}, 90000);
+// 从后台切回前台时立即同步一次（家长常在切回 App 时查看）
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden) return;
+  const pa = document.getElementById('parentApp');
+  if(pa && !pa.classList.contains('hidden')) syncChildrenWealthFromCloud();
+});
 
 // 注册 Service Worker：支持"添加到主屏幕"与桌面图标红点/离线访问
 if('serviceWorker' in navigator){
