@@ -129,28 +129,74 @@ select.role-select{padding:11px 14px}
     </div>
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-        <b style="font-size:16px">🏦 中国人民银行利率</b>
-        <button class="btn btn-sm btn-ghost" onclick="syncRate()">🔄 同步</button>
+        <b style="font-size:16px">🏦 存款利率设置</b>
+        <button class="btn btn-sm btn-ghost" id="rateEditBtn" onclick="toggleRateEdit()">✏️ 编辑</button>
       </div>
-      <div class="rates-box" id="rateBox"></div>
+
+      <!-- 折叠态：只读摘要 -->
+      <div id="rateViewBox">
+        <div class="rates-box" id="rateBox"></div>
+        <div style="font-size:12px;color:var(--primary);margin-top:8px" id="rateActiveHint"></div>
+      </div>
+
+      <!-- 编辑态：全部利率可改 + 选择计息利率 -->
+      <div id="rateEditBox" class="hidden">
+        <p class="muted" style="font-size:12px;margin-bottom:10px">6 项利率均可自行修改；并选择用「哪一个利率」给孩子计算利息。</p>
+        <div class="flex" style="gap:8px;flex-wrap:wrap">
+          <div class="flex-1" style="min-width:140px"><label>活期存款 (%)</label><input id="rt_demand" type="number" step="0.01" min="0" max="50"></div>
+          <div class="flex-1" style="min-width:140px"><label>3个月定期 (%)</label><input id="rt_3m" type="number" step="0.01" min="0" max="50"></div>
+          <div class="flex-1" style="min-width:140px"><label>6个月定期 (%)</label><input id="rt_6m" type="number" step="0.01" min="0" max="50"></div>
+          <div class="flex-1" style="min-width:140px"><label>1年期定期 (%)</label><input id="rt_1y" type="number" step="0.01" min="0" max="50"></div>
+          <div class="flex-1" style="min-width:140px"><label>2年期定期 (%)</label><input id="rt_2y" type="number" step="0.01" min="0" max="50"></div>
+          <div class="flex-1" style="min-width:140px"><label>3年期定期 (%)</label><input id="rt_3y" type="number" step="0.01" min="0" max="50"></div>
+        </div>
+        <label style="margin-top:14px">★ 用哪个利率给孩子计息</label>
+        <select id="rt_active">
+          <option value="demand">活期存款</option>
+          <option value="fixed_3m">3个月定期</option>
+          <option value="fixed_6m">6个月定期</option>
+          <option value="fixed_1y">1年期定期</option>
+          <option value="fixed_2y">2年定期</option>
+          <option value="fixed_3y">3年定期</option>
+        </select>
+        <div class="flex" style="margin-top:14px;gap:8px">
+          <button class="btn btn-ghost flex-1" onclick="cancelRateEdit()">取消</button>
+          <button class="btn flex-1" onclick="saveRates()">💾 保存</button>
+        </div>
+        <p class="muted" style="font-size:11px;text-align:center;margin-top:10px;cursor:pointer;text-decoration:underline" onclick="syncRate()">不确定填多少？点这里恢复央行参考值</p>
+      </div>
+
       <div style="font-size:11px;color:var(--muted);margin-top:8px">
-        来源：中国货币网 chinamoney.com.cn · 数据更新时间：<span id="rateDate">-</span>
+        数据更新时间：<span id="rateDate">-</span> · 来源：<span id="rateSource">手动设置</span>
       </div>
     </div>
 
-    <!-- 理财收益率设置 -->
+    <!-- 理财收益率设置（折叠式：默认摘要，点编辑才展开） -->
     <div class="card">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
         <b style="font-size:16px">📈 理财收益率设置</b>
-        <button class="btn btn-sm btn-ghost" onclick="saveWealthRates()">💾 保存</button>
+        <button class="btn btn-sm btn-ghost" id="wrEditBtn" onclick="toggleWrEdit()">✏️ 编辑</button>
       </div>
-      <p class="muted" style="font-size:12px;margin-bottom:12px">设置各期限理财年化收益率，孩子购买时按此计算每天利息与到期收益。可随时手动调整。</p>
-      <div class="flex" style="gap:8px">
-        <div class="flex-1"><label>3个月 (%)</label><input id="wr3" type="number" value="3" step="0.1" min="0" max="50"></div>
-        <div class="flex-1"><label>6个月 (%)</label><input id="wr6" type="number" value="5" step="0.1" min="0" max="50"></div>
-        <div class="flex-1"><label>12个月 (%)</label><input id="wr12" type="number" value="8" step="0.1" min="0" max="50"></div>
+
+      <!-- 折叠态：摘要 -->
+      <div id="wrViewBox">
+        <div class="rates-box" id="wrSummary"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px">示例：购买 ¥1000、3个月、收益率 3% → 到期利息 ¥7.50，共 ¥1007.50 回到余额</div>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:8px">示例：购买 ¥1000、3个月、收益率 3% → 到期利息 ¥7.50，共 ¥1007.50 回到余额</div>
+
+      <!-- 编辑态：输入 + 保存/取消 -->
+      <div id="wrEditBox" class="hidden">
+        <p class="muted" style="font-size:12px;margin-bottom:12px">设置各期限理财年化收益率，孩子购买时按此计算每天利息与到期收益。</p>
+        <div class="flex" style="gap:8px">
+          <div class="flex-1"><label>3个月 (%)</label><input id="wr3" type="number" value="3" step="0.1" min="0" max="50"></div>
+          <div class="flex-1"><label>6个月 (%)</label><input id="wr6" type="number" value="5" step="0.1" min="0" max="50"></div>
+          <div class="flex-1"><label>12个月 (%)</label><input id="wr12" type="number" value="8" step="0.1" min="0" max="50"></div>
+        </div>
+        <div class="flex" style="margin-top:14px;gap:8px">
+          <button class="btn btn-ghost flex-1" onclick="cancelWrEdit()">取消</button>
+          <button class="btn flex-1" onclick="saveWealthRates()">💾 保存</button>
+        </div>
+      </div>
     </div>
 
     <!-- 管理说明 -->
@@ -317,18 +363,33 @@ select.role-select{padding:11px 14px}
               <div style="font-size:18px;font-weight:700;margin-top:2px" id="childDailyInterest">¥0.00</div>
             </div>
           </div>
-          <div style="font-size:12px;opacity:.7;margin-top:8px">年利率 <b id="childRate">1.50%</b> · 同步中国人民银行</div>
+          <div style="font-size:12px;opacity:.7;margin-top:8px"><span id="childRateLabel">1年期定期</span>年利率 <b id="childRate">1.50%</b></div>
         </div>
       </div>
 
-      <!-- 储蓄目标 -->
+      <!-- 储蓄目标（孩子自己设置） -->
       <div class="card" id="goalCard">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <b>🎯 自己的小目标</b>
-          <span class="muted" style="font-size:12px" id="goalText">未设置</span>
+          <b>🎯 我的小目标</b>
+          <span style="font-size:12px;color:var(--primary);cursor:pointer;text-decoration:underline" onclick="openGoalEdit()" id="goalEditBtn">✏️ 设置目标</span>
         </div>
-        <div class="progress"><div id="goalProgress" style="width:0%"></div></div>
-        <div style="font-size:12px;color:var(--muted)" id="goalHint">努力存钱，向着目标前进吧！</div>
+        <div id="goalSetBox">
+          <div class="flex" style="gap:8px;align-items:flex-end;margin-top:10px">
+            <div style="flex:1">
+              <label style="font-size:12px">我想存到（元）</label>
+              <input type="number" id="goalInput" placeholder="如 1000" min="1" step="1">
+            </div>
+            <button class="btn" style="width:auto;padding:12px 18px" onclick="saveGoalSelf()">保存</button>
+          </div>
+        </div>
+        <div id="goalViewBox" class="hidden">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:10px">
+            <span class="muted" style="font-size:12px" id="goalText">未设置</span>
+            <span style="font-size:12px;font-weight:700" id="goalPct">0%</span>
+          </div>
+          <div class="progress" style="margin-top:6px"><div id="goalProgress" style="width:0%"></div></div>
+          <div style="font-size:12px;color:var(--muted);margin-top:6px" id="goalHint">努力存钱，向着目标前进吧！</div>
+        </div>
       </div>
 
       <!-- 理财专区 -->
@@ -477,28 +538,56 @@ select.role-select{padding:11px 14px}
 const DB_KEY = 'kidsBankDB_v1';
 const ROLE_KEY = 'kidsBankRole';
 
-// 央行利率配置（中国货币网 SDDS，2026-08-14）
+// 央行利率配置（全部可自行编辑；activeKey 指定用哪个利率计息）
 const DEFAULT_RATES = {
   demand: 0.35,        // 活期存款基准利率
-  fixed_1y: 1.50,      // 1年期整存整取基准利率
   fixed_3m: 1.10,      // 3个月
   fixed_6m: 1.30,      // 6个月
+  fixed_1y: 1.50,      // 1年期整存整取基准利率
   fixed_2y: 2.10,      // 2年
   fixed_3y: 2.75,      // 3年
-  source: '中国货币网',
+  activeKey: 'fixed_1y',   // ★ 用哪个利率给孩子计息（可切换）
+  source: '手动设置',
   date: '2026-08-14',
   url: 'https://www.chinamoney.com.cn/chinese/sddsint/'
 };
+// 利率键 → 中文名
+const RATE_LABELS = {
+  demand: '活期存款', fixed_3m: '3个月定期', fixed_6m: '6个月定期',
+  fixed_1y: '1年期定期', fixed_2y: '2年定期', fixed_3y: '3年定期'
+};
+const RATE_KEYS = ['demand','fixed_3m','fixed_6m','fixed_1y','fixed_2y','fixed_3y'];
+// 取当前生效的计息利率（数值）
+function activeRateKey(rates){ return (rates && rates.activeKey && RATE_LABELS[rates.activeKey]) ? rates.activeKey : 'fixed_1y'; }
+function activeRate(rates){
+  const r = rates || {};
+  const k = activeRateKey(r);
+  const v = Number(r[k]);
+  if(!isNaN(v)) return v;
+  return Number(r.fixed_1y) || 1.5;
+}
+function activeRateLabel(rates){ return RATE_LABELS[activeRateKey(rates)] || '1年期定期'; }
+// 兼容旧数据：补齐缺失字段
+function normalizeRates(d){
+  const out = Object.assign({}, DEFAULT_RATES, (d && typeof d==='object') ? d : {});
+  RATE_KEYS.forEach(k=>{ const v = Number(out[k]); out[k] = isNaN(v) ? DEFAULT_RATES[k] : v; });
+  if(!RATE_LABELS[out.activeKey]) out.activeKey = 'fixed_1y';
+  return out;
+}
+function normalizeDB(d){
+  if(!d || typeof d!=='object') d = {};
+  if(!Array.isArray(d.children)) d.children = [];
+  d.rates = normalizeRates(d.rates);
+  if(!d.wealthRates) d.wealthRates = {3:3,6:5,12:8};
+  return d;
+}
 
 function loadDB(){
   try{
     const d = JSON.parse(localStorage.getItem(DB_KEY));
-    if(!d) return {children:[], rates:DEFAULT_RATES, wealthRates:{3:3,6:5,12:8}};
-    if(!d.rates) d.rates = DEFAULT_RATES;
-    if(!d.wealthRates) d.wealthRates = {3:3,6:5,12:8};
-    return d;
+    return normalizeDB(d);
   }
-  catch(e){ return {children:[], rates:DEFAULT_RATES, wealthRates:{3:3,6:5,12:8}}; }
+  catch(e){ return normalizeDB(null); }
 }
 function saveDB(db){ localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 function getDB(){ return loadDB(); }
@@ -596,8 +685,8 @@ function renderChildList(db){
   }
   box.innerHTML = db.children.map(c=>{
     const balance = calcBalance(c);
-    const daily = calcDailyInterest(balance, db.rates.fixed_1y);
-    const totalInterest = calcTotalInterest(c, db.rates.fixed_1y);
+    const daily = calcDailyInterest(balance, activeRate(db.rates));
+    const totalInterest = calcTotalInterest(c, activeRate(db.rates));
     const avatarHTML = c.photo ? `<img src="${c.photo}" alt="${c.name}">` : c.name.charAt(0);
     return `<div class="list-item" onclick="openChildDetail('${c.id}')">
       <div class="avatar">${avatarHTML}</div>
@@ -611,15 +700,59 @@ function renderChildList(db){
 }
 
 function renderRates(db){
-  const r = db.rates;
-  document.getElementById('rateBox').innerHTML = `
-    <div class="r"><span>活期存款</span><b>${r.demand}%</b></div>
-    <div class="r"><span>3个月定期</span><b>${r.fixed_3m}%</b></div>
-    <div class="r"><span>6个月定期</span><b>${r.fixed_6m}%</b></div>
-    <div class="r" style="background:#dbeafe;margin:2px -4px;padding:2px 12px;border-radius:4px"><span>🔥 1年期定期（用于利息计算）</span><b style="color:#1e40af">${r.fixed_1y}%</b></div>
-    <div class="r"><span>2年期定期</span><b>${r.fixed_2y}%</b></div>
-    <div class="r"><span>3年期定期</span><b>${r.fixed_3y}%</b></div>`;
-  document.getElementById('rateDate').textContent = r.date;
+  const r = normalizeRates(db.rates);
+  const ak = activeRateKey(r);
+  // 折叠态：只读摘要（当前计息利率高亮）
+  document.getElementById('rateBox').innerHTML = RATE_KEYS.map(k=>{
+    const on = k===ak;
+    return `<div class="r"${on?' style="background:#dbeafe;margin:2px -4px;padding:2px 12px;border-radius:4px"':''}>
+      <span>${on?'🔥 ':''}${RATE_LABELS[k]}</span>
+      <b${on?' style="color:#1e40af"':''}>${r[k]}%</b>
+    </div>`;
+  }).join('');
+  const hint = document.getElementById('rateActiveHint');
+  if(hint) hint.textContent = '★ 当前计息利率：'+RATE_LABELS[ak]+' '+r[ak]+'%';
+  const dEl = document.getElementById('rateDate'); if(dEl) dEl.textContent = r.date;
+  const sEl = document.getElementById('rateSource'); if(sEl) sEl.textContent = r.source || '手动设置';
+  // 编辑态：把值灌进输入框
+  const map = {rt_demand:'demand', rt_3m:'fixed_3m', rt_6m:'fixed_6m', rt_1y:'fixed_1y', rt_2y:'fixed_2y', rt_3y:'fixed_3y'};
+  Object.keys(map).forEach(id=>{ const el=document.getElementById(id); if(el) el.value = r[map[id]]; });
+  const sel = document.getElementById('rt_active'); if(sel) sel.value = ak;
+}
+
+/* ===== 利率：编辑 / 保存 折叠切换 ===== */
+function toggleRateEdit(){ setRateEditMode(true); }
+function cancelRateEdit(){ setRateEditMode(false); renderRates(getDB()); }
+function setRateEditMode(on){
+  const vb = document.getElementById('rateViewBox');
+  const eb = document.getElementById('rateEditBox');
+  const btn = document.getElementById('rateEditBtn');
+  if(!vb || !eb || !btn) return;
+  if(on){ vb.classList.add('hidden'); eb.classList.remove('hidden'); btn.textContent = '✏️ 编辑中'; btn.style.opacity = .45; }
+  else { vb.classList.remove('hidden'); eb.classList.add('hidden'); btn.textContent = '✏️ 编辑'; btn.style.opacity = 1; }
+}
+// 保存利率：写库 + 折叠回摘要 + 推送给所有孩子
+function saveRates(){
+  const get = id => parseFloat((document.getElementById(id)||{}).value);
+  const vals = {
+    demand: get('rt_demand'), fixed_3m: get('rt_3m'), fixed_6m: get('rt_6m'),
+    fixed_1y: get('rt_1y'), fixed_2y: get('rt_2y'), fixed_3y: get('rt_3y')
+  };
+  const bad = RATE_KEYS.filter(k=>isNaN(vals[k])||vals[k]<0||vals[k]>50);
+  if(bad.length){ toast('请填写有效利率（0 ~ 50）：'+bad.map(k=>RATE_LABELS[k]).join('、')); return; }
+  const sel = document.getElementById('rt_active');
+  const activeKey = (sel && RATE_LABELS[sel.value]) ? sel.value : 'fixed_1y';
+  const db = getDB();
+  db.rates = normalizeRates(Object.assign({}, db.rates, vals, {
+    activeKey: activeKey, date: new Date().toISOString().slice(0,10), source: '手动设置'
+  }));
+  saveDB(db);
+  renderRates(db);
+  setRateEditMode(false);
+  renderChildList(db);
+  // 同步给所有孩子（force：利率是孩子端必须立刻看到的关键数据）
+  (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates, true); });
+  toast('✅ 利率已保存，计息利率：'+activeRateLabel(db.rates)+' '+activeRate(db.rates)+'%');
 }
 
 function openAddChild(){
@@ -675,8 +808,8 @@ function openChildDetail(id){
   const c = db.children.find(x=>x.id===id);
   if(!c) return;
   const balance = calcBalance(c);
-  const daily = calcDailyInterest(balance, db.rates.fixed_1y);
-  const totalInterest = calcTotalInterest(c, db.rates.fixed_1y);
+  const daily = calcDailyInterest(balance, activeRate(db.rates));
+  const totalInterest = calcTotalInterest(c, activeRate(db.rates));
   const avatarHTML = c.photo ? `<img src="${c.photo}" alt="${c.name}">` : c.name.charAt(0);
   document.getElementById('childDetailContent').innerHTML = `
     <div style="text-align:center;margin-bottom:14px">
@@ -694,10 +827,8 @@ function openChildDetail(id){
         <div><div class="muted">每日利息</div><b style="color:#1e40af">¥${daily.toFixed(3)}</b></div>
         <div><div class="muted">累计利息收入</div><b style="color:#15803d">¥${totalInterest.toFixed(2)}</b></div>
       </div>
-      <div class="muted" style="font-size:11px;margin-top:6px">年利率 ${db.rates.fixed_1y}%</div>
+      <div class="muted" style="font-size:11px;margin-top:6px">计息利率 ${activeRateLabel(db.rates)} ${activeRate(db.rates)}%</div>
     </div>
-    <label>🎯 自己的小目标（元）</label>
-    <input type="number" id="goalInput" value="${c.goal||''}" placeholder="如 1000" min="0" step="1">
     <div class="flex" style="margin-top:12px;gap:8px">
       <button class="btn btn-green flex-1" onclick="openTx('${id}','in')">💰 存入</button>
       <button class="btn btn-red flex-1" onclick="openTx('${id}','out')">💸 取出</button>
@@ -722,8 +853,7 @@ function openChildDetail(id){
       <div style="margin-top:14px">
         <b style="font-size:14px">📈 理财持仓（${c.wealth?c.wealth.length:0}）</b>
         <div id="detailWealthList" style="margin-top:6px">${renderWealthDetail(c)}</div>
-      </div>
-      <button class="btn btn-ghost btn-block" style="margin-top:14px" onclick="saveGoal('${id}')">保存目标</button>`;
+      </div>`;
   document.getElementById('childDetailModal').classList.remove('hidden');
   // 关键修复：打开详情即把该孩子同步到「id 主题 + 登录主题」，确保孩子用姓名+出生日期默认登录可云端找回
   pushChildCloud(c, db.rates);
@@ -862,8 +992,32 @@ function deleteChild(id){
 }
 
 /* ====================== 云端同步（ntfy.sh 免费服务） ====================== */
-// ntfy.sh 是免费公共服务，无需注册，用于家长→孩子的数据同步
+// ntfy.sh 是免费公共服务，无需注册，仅作 Supabase 的备用通道。
+// ★ 重要：ntfy 公共实例有严格限流（HTTP 429）。Supabase 已是主存储，因此对 ntfy 做：
+//   ① 全局限流冷却  ② 推送节流（非关键更新最多 6 小时推一次）  ③ 429 时立刻停手并给出友好提示
 const NTFY_BASE = 'https://ntfy.sh/kidsbank_';
+const NTFY_COOLDOWN_KEY = 'kb_ntfy_cool';
+const NTFY_COOLDOWN_MIN = 10;              // 触发 429 后暂停备用通道的分钟数
+const NTFY_THROTTLE_MS = 6*3600*1000;       // 非关键推送的最小间隔（6 小时）
+let ntfyCoolUntil = (function(){ try{ return Number(localStorage.getItem(NTFY_COOLDOWN_KEY))||0; }catch(e){ return 0; } })();
+function inNtfyCooldown(){ return Date.now() < ntfyCoolUntil; }
+function ntfyCooldownLeft(){ return Math.max(1, Math.ceil((ntfyCoolUntil - Date.now())/60000)); }
+function startNtfyCooldown(min){
+  ntfyCoolUntil = Date.now() + (min||NTFY_COOLDOWN_MIN)*60000;
+  try{ localStorage.setItem(NTFY_COOLDOWN_KEY, String(ntfyCoolUntil)); }catch(e){}
+}
+// 推送节流：同一孩子非关键更新最多 6 小时推一次到 ntfy（关键更新 force=true 不受限）
+function ntfyPushAllowed(account, force){
+  if(force) return true;
+  try{
+    const last = Number(localStorage.getItem('kb_ntfypush_'+account))||0;
+    return (Date.now() - last) >= NTFY_THROTTLE_MS;
+  }catch(e){ return true; }
+}
+// 仅在推送成功后才记时间戳（失败不占用节流配额，下次仍可重试）
+function markNtfyPushed(account){
+  try{ localStorage.setItem('kb_ntfypush_'+account, String(Date.now())); }catch(e){}
+}
 
 /* ====================== Supabase 云存储（免费档，持久保存，替代 ntfy 的 12h 缓存脆弱性） ======================
  * 在 https://supabase.com 建一个免费项目，运行下面给出的 SQL 建表后，把 Project URL 与 anon/public key 填到此处。
@@ -887,6 +1041,7 @@ function enqueueCloudPush(childId, data){
   }catch(e){}
 }
 async function flushCloudPushQueue(){
+  if(inNtfyCooldown()) return;   // 限流冷却期内不发备用通道
   let q;
   try{ q = JSON.parse(localStorage.getItem('kb_pushq')||'[]'); }catch(e){ q=[]; }
   if(!q.length) return;
@@ -894,21 +1049,29 @@ async function flushCloudPushQueue(){
   for(const item of q){
     try{
       const resp = await fetch(NTFY_BASE + item.id, {method:'POST', body:JSON.stringify(item.d), headers:{'Content-Type':'application/json'}});
+      if(resp.status === 429){ startNtfyCooldown(); remain.push(item); break; } // 限流：保留队列并停手
       if(!resp.ok) remain.push(item);
     }catch(e){ remain.push(item); }
   }
   try{ localStorage.setItem('kb_pushq', JSON.stringify(remain)); }catch(e){}
 }
-// 单次推送
+// 单次推送：识别 429 限流并立即抛出，避免继续加重限流
 async function pushToCloudOnce(childId, data){
   const resp = await fetch(NTFY_BASE + childId, {method:'POST', body:JSON.stringify(data), headers:{'Content-Type':'application/json'}});
+  if(resp.status === 429){ startNtfyCooldown(); const e = new Error('ntfy 限流 429'); e.rateLimited = true; throw e; }
   return resp.ok;
 }
-// 把孩子数据推送到云端（自带重试 + 失败补传，确保每次更新都能上云）
-async function pushToCloud(childId, data){
-  for(let attempt=1; attempt<=3; attempt++){
-    try{ if(await pushToCloudOnce(childId, data)) return true; }catch(e){}
-    await new Promise(r=>setTimeout(r, 350*attempt)); // 退避重试
+// 把孩子数据推送到 ntfy 备用通道。
+// 已接入节流 + 限流冷却：Supabase 是主存储，ntfy 只是兼容旧链接的缓存刷新，不必每次都推。
+async function pushToCloud(childId, data, force){
+  if(inNtfyCooldown()) return false;               // 冷却期内直接跳过，不再加剧限流
+  if(!ntfyPushAllowed(childId, force)) return true; // 节流：6 小时内已成功推过则跳过
+  for(let attempt=1; attempt<=2; attempt++){
+    try{ if(await pushToCloudOnce(childId, data)){ markNtfyPushed(childId); return true; } }
+    catch(e){
+      if(e && e.rateLimited) return false;        // 限流：立即停手，不再重试
+    }
+    await new Promise(r=>setTimeout(r, 400*attempt)); // 退避重试
   }
   enqueueCloudPush(childId, data); // 最终失败：入队，待网络恢复/下次打开时补传
   return false;
@@ -927,8 +1090,9 @@ async function pullFromCloudResult(childId){
     }
   }
   // ② ntfy 兜底（仅在未配置 Supabase 或 Supabase 异常时生效）
+  if(inNtfyCooldown()) return {ok:false, reason:'云端暂时限流，已暂停备用通道（约 '+ntfyCooldownLeft()+' 分钟后自动恢复）'};
   const topic = NTFY_BASE + childId;
-  for(let attempt=1; attempt<=2; attempt++){
+  try{
     let ctrl, timer;
     try{
       ctrl = new AbortController();
@@ -953,14 +1117,14 @@ async function pullFromCloudResult(childId){
         return {ok:false, reason:'云端暂无该账号的数据（家长可能还未同步，或缓存已过期）'};
       }
       if(resp.status === 404) return {ok:false, reason:'云端暂无该账号的数据（家长可能还未同步）'};
+      if(resp.status === 429){ startNtfyCooldown(); return {ok:false, reason:'云端限流（HTTP 429），备用通道暂停约 '+NTFY_COOLDOWN_MIN+' 分钟，主通道不受影响'}; }
       return {ok:false, reason:'云端返回错误（HTTP '+resp.status+'）'};
     }catch(e){
       if(timer) clearTimeout(timer);
       if(e && e.name === 'AbortError') return {ok:false, reason:'请求超时（8 秒），请检查网络或稍后重试'};
       return {ok:false, reason:'网络异常：'+(e&&e.message?e.message:'无法连接 ntfy 服务')};
     }
-    if(attempt < 2) await new Promise(r=>setTimeout(r, 600)); // 退避重试
-  }
+  }catch(e){}
   return {ok:false, reason:'多次同步失败，请稍后重试'};
 }
 // 兼容旧调用：仅返回数据对象或 null
@@ -969,16 +1133,23 @@ async function pullFromCloud(childId){
   return r.ok ? r.data : null;
 }
 
+// 读取理财收益率配置（★ 存于 db.wealthRates，不是 db.rates.wealthRates）
+function getWealthRatesCfg(){
+  try{ const db = getDB(); return db.wealthRates || {3:3,6:5,12:8}; }
+  catch(e){ return {3:3,6:5,12:8}; }
+}
+
 // 构建孩子的云端数据包
 function buildCloudData(c, rates){
+  const wealthRates = getWealthRatesCfg();  // ★ 修复：原来读 rates.wealthRates（不存在）导致永远回退默认值
   return {
     id: c.id,  // 回传原始 id，便于云端找回后恢复父子通信
     n: c.name, b: c.birth, g: c.goal||0, p: c.photo||'',
     t: c.transactions.map(t=>[t.type==='in'?1:0, t.amount, t.note, t.time]),
-    r: rates.fixed_1y, rd: rates.date,
+    r: activeRate(rates), rd: rates.date, rk: activeRateKey(rates), rl: activeRateLabel(rates),
     // 理财持仓：本金 / 收益率 / 期限(月) / 购买时间 / 到期时间 / 状态 / 持仓id / 赎回时间
     w: (c.wealth||[]).map(h=>[h.principal, h.rate, h.termMonths, h.buyTime, h.maturityTime, h.status, h.id, h.redeemedTime||null]),
-    wr: rates.wealthRates || {3:3,6:5,12:8},  // 理财收益率（家长设定，孩子购买时按此计算）
+    wr: wealthRates,  // 理财收益率（家长设定，孩子购买时按此计算）
     rq: c.lastReqResult || null,  // 最近一次审批结果
     ts: Date.now(),  // 更新时间戳
     un: c.username || '',  // 登录账号
@@ -1071,14 +1242,15 @@ async function sbUpdateRequest(id, patch){
 }
 
 // 把孩子数据推送到云端：Supabase 为主（持久保存），ntfy 兜底（兼容旧链接）
-function pushChildCloud(c, rates){
+// force=true：关键变更（改密码/改利率/审批）立刻推备用通道，不受节流限制
+function pushChildCloud(c, rates, force){
   const account = c.username ? childLoginId(c.username) : c.id;
   const data = buildCloudData(c, rates);
   if(SB_ON){
     sbUpsert(account, data).catch(e=>console.warn('[Supabase] push fail:', e));
   }
-  // ntfy 兜底：已配置 Supabase 仍推送，保证旧分享链接可用
-  pushToCloud(account, data);
+  // ntfy 兜底：走节流（非关键更新 6 小时最多一次），避免公共实例 429 限流
+  pushToCloud(account, data, force);
 }
 
 // 云端数据包 → 本地孩子对象
@@ -1095,6 +1267,7 @@ function cloudToChild(data, id){
       buyTime: h[3], maturityTime: h[4], status: h[5], redeemedTime: h[7]||null
     })),
     sharedRate: data.r, sharedRateDate: data.rd,
+    rateKey: data.rk || 'fixed_1y', rateLabel: data.rl || '1年期定期',
     wealthRates: data.wr || {3:3,6:5,12:8},
     lastReqResult: data.rq || null,
     username: data.un || '',
@@ -1666,20 +1839,37 @@ function buyWealth(){
   renderChildHome();
 }
 
-// 家长端：保存理财收益率并同步云端
+/* ===== 理财收益率：折叠 / 编辑 / 保存 ===== */
+function setWrEditMode(on){
+  const vb = document.getElementById('wrViewBox');
+  const eb = document.getElementById('wrEditBox');
+  const btn = document.getElementById('wrEditBtn');
+  if(!vb || !eb || !btn) return;
+  if(on){ vb.classList.add('hidden'); eb.classList.remove('hidden'); btn.textContent = '✏️ 编辑中'; btn.style.opacity = .45; }
+  else { vb.classList.remove('hidden'); eb.classList.add('hidden'); btn.textContent = '✏️ 编辑'; btn.style.opacity = 1; }
+}
+function toggleWrEdit(){
+  const eb = document.getElementById('wrEditBox');
+  if(eb && eb.classList.contains('hidden')) setWrEditMode(true); // 已展开则不再响应，避免误折叠
+}
+function cancelWrEdit(){ renderParentWealthRates(getDB()); setWrEditMode(false); }
+
+// 家长端：保存理财收益率并同步云端（保存后自动折叠回摘要）
 function saveWealthRates(){
-  const r3 = parseFloat(document.getElementById('wr3').value);
-  const r6 = parseFloat(document.getElementById('wr6').value);
-  const r12 = parseFloat(document.getElementById('wr12').value);
+  const r3 = parseFloat((document.getElementById('wr3')||{}).value);
+  const r6 = parseFloat((document.getElementById('wr6')||{}).value);
+  const r12 = parseFloat((document.getElementById('wr12')||{}).value);
   if([r3,r6,r12].some(v=>isNaN(v)||v<0||v>50)){ toast('请输入有效收益率（0 ~ 50）'); return; }
   const db = getDB();
   db.wealthRates = {3:r3, 6:r6, 12:r12};
   saveDB(db);
-  // 同步到云端，使孩子端购买时按最新收益率计算
-  (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates); });
   renderParentWealthRates(db);
+  setWrEditMode(false);   // ★ 保存后折叠缩小，按钮恢复为「编辑」
+  // 同步到云端（force：收益率是关键数据，必须立刻让孩子端看到）
+  (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates, true); });
   toast('✅ 理财收益率已更新，孩子端将自动同步');
 }
+// 渲染：编辑框填值 + 折叠态摘要
 function renderParentWealthRates(db){
   db = db || getDB();
   const wr = db.wealthRates || {3:3,6:5,12:8};
@@ -1687,6 +1877,11 @@ function renderParentWealthRates(db){
   if(e3) e3.value = wr[3];
   if(e6) e6.value = wr[6];
   if(e12) e12.value = wr[12];
+  const sum = document.getElementById('wrSummary');
+  if(sum) sum.innerHTML = `
+    <div class="r"><span>3个月期</span><b>${wr[3]}%</b></div>
+    <div class="r"><span>6个月期</span><b>${wr[6]}%</b></div>
+    <div class="r"><span>12个月期</span><b>${wr[12]}%</b></div>`;
 }
 
 // 家长端：从云端同步孩子的理财持仓/余额变动（孩子端购买理财后，家长也能看到）
@@ -1753,23 +1948,20 @@ function importData(){
   }
 }
 
-/* ====================== 利率同步 ====================== */
+/* ====================== 利率：一键填入央行最新参考值 ====================== */
+// 已改为「编辑卡」方式设置；此函数保留为快捷填入央行参考值
 function syncRate(){
   const db = getDB();
-  const cur = db.rates.fixed_1y;
-  const input = prompt('请输入中国人民银行1年期存款基准利率（%）\n\n查询地址：中国货币网 chinamoney.com.cn\n或直接搜索"央行1年期存款基准利率"\n\n当前利率：'+cur+'%', cur);
-  if(input === null) return;
-  const val = parseFloat(input);
-  if(isNaN(val) || val <= 0 || val > 20){
-    toast('❌ 利率格式不正确，请输入如 1.50 这样的数字');
-    return;
-  }
-  db.rates.fixed_1y = val;
-  db.rates.date = new Date().toISOString().slice(0,10);
-  db.rates.source = '手动输入';
+  if(!confirm('将 6 项利率恢复为央行参考值（活期 0.35 / 3月 1.10 / 6月 1.30 / 1年 1.50 / 2年 2.10 / 3年 2.75）。\n\n如需自定义，请点「✏️ 编辑」手动填写。\n\n确定恢复吗？')) return;
+  db.rates = normalizeRates(Object.assign({}, db.rates, {
+    demand: 0.35, fixed_3m: 1.10, fixed_6m: 1.30, fixed_1y: 1.50, fixed_2y: 2.10, fixed_3y: 2.75,
+    source: '央行参考值', date: new Date().toISOString().slice(0,10)
+  }));
   saveDB(db);
   renderRates(db);
-  toast('✅ 利率已更新为 '+val+'%');
+  renderChildList(db);
+  (db.children||[]).forEach(c=>{ if(c.id && c.id!=='shared') pushChildCloud(c, db.rates, true); });
+  toast('✅ 已恢复央行参考值并同步给孩子端');
 }
 
 /* ====================== 头像上传 ====================== */
@@ -2097,6 +2289,70 @@ async function refreshCloudData(){
   toast('⚠️ 同步失败：'+(res.reason||'请检查网络'));
 }
 
+/* ============ 孩子自己设置「我的小目标」 ============ */
+// 渲染目标卡片：已设置 → 显示进度；未设置 → 显示输入框
+function renderGoalCard(c, balance){
+  const setBox = document.getElementById('goalSetBox');
+  const viewBox = document.getElementById('goalViewBox');
+  const editBtn = document.getElementById('goalEditBtn');
+  if(!setBox || !viewBox) return;
+  const has = c.goal && c.goal > 0;
+  if(has){
+    setBox.classList.add('hidden');
+    viewBox.classList.remove('hidden');
+    if(editBtn) editBtn.textContent = '✏️ 修改目标';
+    const pct = Math.min(100, balance / c.goal * 100);
+    const gt = document.getElementById('goalText');
+    const gp = document.getElementById('goalProgress');
+    const gh = document.getElementById('goalHint');
+    const gpc = document.getElementById('goalPct');
+    if(gt) gt.textContent = '¥'+balance.toFixed(2)+' / ¥'+Number(c.goal).toFixed(2);
+    if(gpc) gpc.textContent = pct.toFixed(0)+'%';
+    if(gp) gp.style.width = pct+'%';
+    if(gh){
+      if(pct>=100) gh.textContent = '🎉 太棒了！我的小目标达成啦！';
+      else gh.textContent = '还差 ¥'+(c.goal-balance).toFixed(2)+' 就能达成目标，加油！';
+    }
+  }else{
+    setBox.classList.remove('hidden');
+    viewBox.classList.add('hidden');
+    if(editBtn) editBtn.textContent = '✏️ 设置目标';
+  }
+}
+// 点击"设置/修改目标"：切到输入态并聚焦
+function openGoalEdit(){
+  const setBox = document.getElementById('goalSetBox');
+  const viewBox = document.getElementById('goalViewBox');
+  const c = loadLoggedInChild();
+  const inp = document.getElementById('goalInput');
+  if(inp && c) inp.value = (c.goal && c.goal>0) ? c.goal : '';
+  if(setBox) setBox.classList.remove('hidden');
+  if(viewBox) viewBox.classList.add('hidden');
+  setTimeout(()=>{ if(inp) inp.focus(); }, 50);
+}
+// 孩子自己保存目标 → 写本地 + 推云端（家长端不再展示该字段）
+function saveGoalSelf(){
+  const inp = document.getElementById('goalInput');
+  const goal = parseFloat(inp ? inp.value : '')||0;
+  if(!(goal>0)){ toast('请输入一个大于 0 的目标金额'); return; }
+  const c = loadLoggedInChild();
+  if(!c){ toast('请先登录'); return; }
+  // 写本地缓存与家长库中的同一条记录
+  c.goal = goal;
+  cacheChild(c);
+  try{
+    const db = getDB();
+    const ex = db.children.find(x=> x.id===c.id || (c.username && x.username===c.username));
+    if(ex){ ex.goal = goal; saveDB(db); }
+  }catch(e){}
+  loggedChild = c;
+  if(loggedUser){ /* 会话无需变动 */ }
+  pushChildCloud(c, getDB().rates);
+  const balance = calcBalance(c);
+  renderGoalCard(c, balance);
+  toast('✅ 小目标已保存，开始努力吧！');
+}
+
 function renderChildHome(){
   if(!loggedChild) return;
   const db = getDB();
@@ -2113,7 +2369,7 @@ function renderChildHome(){
   loggedChild = c;
   const balance = calcBalance(c);
   // 利率：优先用本地数据库的（家长同步过的），否则用分享链接带来的
-  const rate = c.sharedRate || db.rates.fixed_1y;
+  const rate = (c.sharedRate!=null && c.sharedRate!=='') ? c.sharedRate : activeRate(db.rates);
   const rateDate = c.sharedRateDate || db.rates.date;
   const daily = calcDailyInterest(balance, rate);
   const totalInterest = calcTotalInterest(c, rate);
@@ -2132,21 +2388,10 @@ function renderChildHome(){
   document.getElementById('childTotalInterest').textContent = '¥'+totalInterest.toFixed(2);
   document.getElementById('childDailyInterest').textContent = '¥'+daily.toFixed(3);
   document.getElementById('childRate').textContent = rate+'%';
-  // 储蓄目标
-  if(c.goal && c.goal>0){
-    const pct = Math.min(100, balance/c.goal*100);
-    document.getElementById('goalText').textContent = '¥'+balance.toFixed(0)+' / ¥'+c.goal;
-    document.getElementById('goalProgress').style.width = pct+'%';
-    if(pct>=100){
-      document.getElementById('goalHint').textContent = '🎉 太棒了！储蓄目标已达成！';
-    } else {
-      document.getElementById('goalHint').textContent = `再存 ¥${(c.goal-balance).toFixed(2)} 就能达成目标啦！`;
-    }
-  } else {
-    document.getElementById('goalText').textContent = '未设置';
-    document.getElementById('goalProgress').style.width = '0%';
-    document.getElementById('goalHint').textContent = '请设置你自己的小目标';
-  }
+  { const lb = document.getElementById('childRateLabel');
+    if(lb) lb.textContent = c.rateLabel || activeRateLabel(db.rates); }
+  // 储蓄目标（孩子自己设置 + 进度）
+  renderGoalCard(c, balance);
   // 交易明细
   document.getElementById('childTxList').innerHTML = renderTxList(c.transactions);
   // 理财专区
@@ -2301,7 +2546,8 @@ window.addEventListener('online', flushCloudPushQueue);
 // 启动时尝试补传一次
 flushCloudPushQueue();
 // 孩子端打开期间每 25 秒静默刷新一次，自动获取家长最新数据
-setInterval(silentRefreshChild, 25000);
+// 定时静默同步：90 秒一次（降低云端压力，避免被限流）；页面在后台时跳过
+setInterval(()=>{ if(!document.hidden) silentRefreshChild(); }, 90000);
 // 链接不再依赖 hash；会话存在时 hash 变化重新渲染当前孩子
 window.addEventListener('hashchange', ()=>{ if(loggedUser) renderChild(); });
 </script>
